@@ -5,6 +5,7 @@
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-F4A7C0?style=flat-square&logo=windows&logoColor=white&labelColor=1F1520">
   <img alt="Written in Rust" src="https://img.shields.io/badge/Rust-stable-F74C00?style=flat-square&logo=rust&logoColor=white&labelColor=1F1520">
+  <a href="https://github.com/cyber1998/vac/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cyber1998/vac?style=flat-square&color=F4A7C0&labelColor=1F1520"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-B5E8C9?style=flat-square&labelColor=1F1520">
   <img alt="Based on seshka" src="https://img.shields.io/badge/based%20on-seshka-E8B4D8?style=flat-square&labelColor=1F1520">
 </p>
@@ -30,30 +31,32 @@ seshka is MIT-licensed, Copyright (c) 2026 JigJoy, and that notice is kept in [L
 
 ## ✿ Install
 
-**1. Install Rust** (skip this step if `cargo --version` already works)
+**1. Download it** (one line in PowerShell, nothing else to install)
 
 ```powershell
-winget install Rustlang.Rustup
+irm https://github.com/cyber1998/vac/releases/latest/download/hana.exe -OutFile "$env:LOCALAPPDATA\Microsoft\WindowsApps\hana.exe"
 ```
 
-If rustup asks to install the Visual Studio C++ build tools, say yes. Then open a new terminal.
+That folder is already on your `PATH`. Or grab `hana.exe` by hand from the **[latest release](https://github.com/cyber1998/vac/releases/latest)** and put it anywhere you like.
 
-**2. Install hana**
-
-```powershell
-cargo install --git https://github.com/cyber1998/vac
-```
-
-**3. Run it**
+**2. Run it**
 
 ```powershell
 hana
 ```
 
-That's all. `hana.exe` is a single file in `%USERPROFILE%\.cargo\bin`, which is already on your `PATH`.
+That's all. It's a single 1.3 MB file for 64-bit Windows 10 and 11, with no installer and no runtime. If Windows SmartScreen warns about a downloaded file, choose **More info → Run anyway**: the binary isn't code-signed.
 
 <details>
-<summary>Building from a clone instead</summary>
+<summary>Building from source instead</summary>
+
+With [Rust](https://rustup.rs) installed (`winget install Rustlang.Rustup`):
+
+```powershell
+cargo install --git https://github.com/cyber1998/vac
+```
+
+Or from a clone:
 
 ```powershell
 git clone https://github.com/cyber1998/vac
@@ -62,6 +65,17 @@ cargo install --path .
 ```
 
 </details>
+
+---
+
+## ✿ Sound familiar?
+
+- *"Port 3000 is already in use"*, but nothing you started is running.
+- Dozens of `node.exe`, `python.exe` or `chrome.exe` processes in Task Manager, eating memory after Claude Code closed.
+- Playwright or Puppeteer browsers that never went away.
+- `~/.claude` growing by gigabytes, and old git worktrees under `.claude\worktrees` that you forgot about.
+
+Claude Code starts dev servers, watchers, MCP servers and test browsers for you. On Windows, when a session ends, those child processes are often orphaned and keep running. hana is a small terminal app that finds exactly those processes, tells you which session started them, and ends them, along with stale session data and worktrees.
 
 ---
 

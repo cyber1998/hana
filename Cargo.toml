@@ -2,7 +2,12 @@
 name = "hana"
 version = "0.1.0"
 edition = "2021"
-description = "Clean up after Claude Code on Windows: leftover processes, session data and worktrees. Based on jigjoy-ai/seshka."
+description = "Clean up after Claude Code on Windows: find and kill leftover processes, free ports, and reclaim disk from old sessions and git worktrees. A terminal UI based on jigjoy-ai/seshka."
+repository = "https://github.com/cyber1998/vac"
+homepage = "https://github.com/cyber1998/vac"
+readme = "README.md"
+keywords = ["claude-code", "windows", "process", "cleanup", "tui"]
+categories = ["command-line-utilities", "development-tools"]
 license = "MIT"
 
 [[bin]]
