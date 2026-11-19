@@ -5,7 +5,7 @@
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-F4A7C0?style=flat-square&logo=windows&logoColor=white&labelColor=1F1520">
   <img alt="Written in Rust" src="https://img.shields.io/badge/Rust-stable-F74C00?style=flat-square&logo=rust&logoColor=white&labelColor=1F1520">
-  <a href="https://github.com/cyber1998/vac/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cyber1998/vac?style=flat-square&color=F4A7C0&labelColor=1F1520"></a>
+  <a href="https://github.com/cyber1998/hana/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cyber1998/hana?style=flat-square&color=F4A7C0&labelColor=1F1520"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-B5E8C9?style=flat-square&labelColor=1F1520">
   <img alt="Based on seshka" src="https://img.shields.io/badge/based%20on-seshka-E8B4D8?style=flat-square&labelColor=1F1520">
 </p>
@@ -25,7 +25,11 @@ hana is a Windows port of **[seshka](https://github.com/jigjoy-ai/seshka)** by t
 
 seshka came up with the idea and the method this whole tool rests on: read the markers Claude Code leaves in every process's environment, and treat a process as left behind once its Claude Code is gone. Its session grouping, helper folding, protected programs and idle-session handling are all carried over here. hana rewrites it in Rust for Windows and adds a storage tab and themes.
 
-seshka is MIT-licensed, Copyright (c) 2026 JigJoy, and that notice is kept in [LICENSE](LICENSE). If you're on a Mac, use the original.
+seshka is MIT-licensed, Copyright (c) 2026 JigJoy, and that notice is kept in [LICENSE](LICENSE). If you're on a Mac, use the original: find it on **[GitHub](https://github.com/jigjoy-ai/seshka)** and **[Product Hunt](https://www.producthunt.com/products/seshka)**, and give it an upvote.
+
+<p>
+  <a href="https://www.producthunt.com/products/seshka"><img alt="seshka on Product Hunt" src="https://img.shields.io/badge/seshka-on%20Product%20Hunt-DA552F?style=for-the-badge&logo=producthunt&logoColor=white&labelColor=1F1520"></a>
+</p>
 
 ---
 
@@ -34,10 +38,10 @@ seshka is MIT-licensed, Copyright (c) 2026 JigJoy, and that notice is kept in [L
 **1. Download it** (one line in PowerShell, nothing else to install)
 
 ```powershell
-irm https://github.com/cyber1998/vac/releases/latest/download/hana.exe -OutFile "$env:LOCALAPPDATA\Microsoft\WindowsApps\hana.exe"
+irm https://github.com/cyber1998/hana/releases/latest/download/hana.exe -OutFile "$env:LOCALAPPDATA\Microsoft\WindowsApps\hana.exe"
 ```
 
-That folder is already on your `PATH`. Or grab `hana.exe` by hand from the **[latest release](https://github.com/cyber1998/vac/releases/latest)** and put it anywhere you like.
+That folder is already on your `PATH`. Or grab `hana.exe` by hand from the **[latest release](https://github.com/cyber1998/hana/releases/latest)** and put it anywhere you like.
 
 **2. Run it**
 
@@ -53,14 +57,14 @@ That's all. It's a single 1.3 MB file for 64-bit Windows 10 and 11, with no inst
 With [Rust](https://rustup.rs) installed (`winget install Rustlang.Rustup`):
 
 ```powershell
-cargo install --git https://github.com/cyber1998/vac
+cargo install --git https://github.com/cyber1998/hana
 ```
 
 Or from a clone:
 
 ```powershell
-git clone https://github.com/cyber1998/vac
-cd vac
+git clone https://github.com/cyber1998/hana
+cd hana
 cargo install --path .
 ```
 
@@ -195,5 +199,5 @@ Processes running elevated or as another user can't be inspected from a normal t
 ---
 
 <p align="center">
-  <sub>MIT · built on <a href="https://github.com/jigjoy-ai/seshka">seshka</a> by <a href="https://jigjoy.ai">JigJoy</a> · ❀</sub>
+  <sub>MIT · built on <a href="https://github.com/jigjoy-ai/seshka">seshka</a> by <a href="https://jigjoy.ai">JigJoy</a> (<a href="https://www.producthunt.com/products/seshka">Product Hunt</a>) · ❀</sub>
 </p>
