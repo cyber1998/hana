@@ -587,6 +587,35 @@ pub fn now_ms() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0)
 }
 
+/// A session's status from its record, and since when (milliseconds since 1970).
+fn status_of(record: &Value) -> (Status, Option<f64>) {
+    let status = match record.get("status").and_then(Value::as_str) {
+        Some("busy") => Status::Busy,
+        Some("idle") => Status::Idle,
+        Some(other) => Status::Other(other.to_string()),
+        None => Status::Unknown,
+    };
+    let since = record.get("statusUpdatedAt").and_then(|v| match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.parse().ok(),
+        _ => None,
+    });
+    (status, since)
+}
+
+/// The current status of the session in Claude Code process `pid`, re-read from its record. Cheap
+/// enough to call every few seconds. None if the record is gone or belongs to an older process.
+pub fn read_status(pid: u32, created: u64) -> Option<(Status, Option<f64>)> {
+    let text = fs::read_to_string(claude_dir().join("sessions").join(format!("{pid}.json"))).ok()?;
+    let json: Value = serde_json::from_str(&text).ok()?;
+    let recorded = match json.get("procStart")? {
+        Value::String(s) => s.trim().to_string(),
+        Value::Number(n) => n.to_string(),
+        _ => return None,
+    };
+    (recorded == created.to_string()).then(|| status_of(&json))
+}
+
 /// Every open Claude Code session, with the background processes from `procs` that belong to it.
 ///
 /// The record in ~/.claude/sessions/<pid>.json is not a documented interface, so every field is
@@ -612,17 +641,7 @@ pub fn sessions(snap: &Snapshot, procs: &[Proc], min_age: u64) -> Vec<RunningSes
                 _ => "Claude Code".to_string(),
             };
             let title = field("name").filter(|s| !s.is_empty()).or_else(|| meta.and_then(|m| m.title));
-            let status = match field("status").as_deref() {
-                Some("busy") => Status::Busy,
-                Some("idle") => Status::Idle,
-                Some(other) => Status::Other(other.to_string()),
-                None => Status::Unknown,
-            };
-            let since = record.and_then(|r| r.get("statusUpdatedAt")).and_then(|v| match v {
-                Value::Number(n) => n.as_f64(),
-                Value::String(s) => s.parse().ok(),
-                _ => None,
-            });
+            let (status, since) = record.map(status_of).unwrap_or((Status::Unknown, None));
             let mut process = snap.make_proc(pid, session_id.clone().unwrap_or_else(|| "no-session".into()), true);
             process.cwd = cwd;
             process.memory = info.memory;

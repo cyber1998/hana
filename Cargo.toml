@@ -1,6 +1,6 @@
 [package]
 name = "hana"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Clean up after Claude Code on Windows: find and kill leftover processes, free ports, and reclaim disk from old sessions and git worktrees. A terminal UI based on jigjoy-ai/seshka."
 repository = "https://github.com/cyber1998/hana"

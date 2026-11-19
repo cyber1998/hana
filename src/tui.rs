@@ -97,6 +97,8 @@ struct App {
     bloom: Option<Instant>,
     /// When the view opened; spinners take their phase from it.
     started: Instant,
+    /// When open sessions' working / idle status was last re-read.
+    status_checked: Instant,
     /// When the running delete began, and what it is deleting.
     deleting_since: Option<(Instant, String)>,
     state: ListState,
@@ -139,6 +141,7 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
         alert: None,
         bloom: None,
         started: Instant::now(),
+        status_checked: Instant::now(),
         deleting_since: None,
         state: ListState::default(),
         selected_key: None,
@@ -184,6 +187,18 @@ impl App {
             let due = self.last_scan.is_some_and(|t| t.elapsed() >= Duration::from_secs(self.cfg.refresh_interval));
             if due && !self.scanning {
                 self.refresh();
+            }
+            // Working / idle changes often; re-read just the session records between full scans.
+            if self.status_checked.elapsed() >= Duration::from_secs(2) {
+                self.status_checked = Instant::now();
+                if let Some(r) = &mut self.result {
+                    for s in &mut r.sessions {
+                        if let Some((status, since)) = scanner::read_status(s.process.pid, s.process.created) {
+                            s.status = status;
+                            s.status_since_ms = since;
+                        }
+                    }
+                }
             }
             terminal.draw(|f| self.draw(f))?;
             // Quick redraws only while something moves: the flower, or a spinner.
@@ -689,22 +704,44 @@ impl App {
         Row { key: format!("{}:{}:{}", kind_prefix(&kind), proc.pid, proc.created), kind, line: fit(left, right, width) }
     }
 
-    fn session_row(&self, s: usize, session: &RunningSession, now: f64, width: usize) -> Row {
+    /// What an open session is doing, as Claude Code reports it in ~/.claude/sessions/<pid>.json:
+    /// a short label and its color. Working is green; idle is amber, or the accent once past the
+    /// idle limit.
+    fn session_state(&self, session: &RunningSession, now: f64) -> (String, Color, bool) {
         let t = self.theme();
         let limit = self.cfg.idle_limit_minutes * 60;
-        let (dot, status) = match (&session.status, session.idle_seconds(now)) {
-            (Status::Idle, Some(idle)) if idle >= limit => (Span::styled(t.idle_dot, Style::new().fg(t.accent)), format!("idle {}", human_age(idle))),
-            (Status::Idle, Some(idle)) => (Span::styled(t.idle_dot, Style::new().fg(t.warn)), format!("idle {}", human_age(idle))),
-            (Status::Idle, None) => (Span::styled(t.idle_dot, Style::new().fg(t.warn)), "idle".into()),
-            (Status::Busy, _) => (Span::styled(t.busy_dot, Style::new().fg(t.good)), "working".into()),
-            (Status::Other(o), _) => (Span::styled(t.unknown_dot, Style::new().fg(t.dim)), o.clone()),
-            (Status::Unknown, _) => (Span::styled(t.unknown_dot, Style::new().fg(t.dim)), "open".into()),
+        match (&session.status, session.idle_seconds(now)) {
+            (Status::Busy, _) => ("working".into(), t.good, true),
+            (Status::Idle, Some(idle)) if idle >= limit => (format!("idle {}", human_age(idle)), t.accent, false),
+            (Status::Idle, Some(idle)) => (format!("idle {}", human_age(idle)), t.warn, false),
+            (Status::Idle, None) => ("idle".into(), t.warn, false),
+            (Status::Other(o), _) => (o.clone(), t.dim, false),
+            (Status::Unknown, _) => ("open".into(), t.dim, false),
+        }
+    }
+
+    /// The open session with this ID, if there is one.
+    fn open_session(&self, id: &str) -> Option<&RunningSession> {
+        self.result.as_ref()?.sessions.iter().find(|s| s.session_id.as_deref() == Some(id))
+    }
+
+    fn session_row(&self, s: usize, session: &RunningSession, now: f64, width: usize) -> Row {
+        let t = self.theme();
+        let (status, color, working) = self.session_state(session, now);
+        let glyph = match session.status {
+            Status::Busy => t.busy_dot,
+            Status::Idle => t.idle_dot,
+            _ => t.unknown_dot,
         };
+        // A working session's dot pulses, so it reads as live at a glance.
+        let mut dot_style = Style::new().fg(color);
+        if working && (self.started.elapsed().as_millis() / 600) % 2 == 1 {
+            dot_style = dot_style.add_modifier(Modifier::DIM);
+        }
         let key = format!("s:{}:{}", session.process.pid, session.process.created);
-        let dot = Span::styled(dot.content.trim().to_string(), dot.style);
         let mut left = vec![
             self.fold_span(self.expanded(&key, false)),
-            dot,
+            Span::styled(glyph.trim().to_string(), dot_style),
             Span::raw(" "),
             Span::styled(session.project.clone(), Style::new().fg(t.text).bold()),
         ];
@@ -712,14 +749,18 @@ impl App {
             left.push(Span::styled(format!(" — {title}"), Style::new().fg(t.text)));
         }
         let right = if self.killing.contains(&session.process.pid) {
-            Span::styled(format!("{:>28} ", format!("{} {}", self.spinner(), t.ending)), Style::new().fg(t.accent))
+            vec![Span::styled(format!("{:>28} ", format!("{} {}", self.spinner(), t.ending)), Style::new().fg(t.accent))]
         } else {
-            Span::styled(
-                format!("{:>12}{:>10}{:>6} ", status, format_bytes(session.memory()), human_age(session.process.age)),
-                Style::new().fg(t.text),
-            )
+            let mut label = Style::new().fg(color);
+            if working {
+                label = label.add_modifier(Modifier::BOLD);
+            }
+            vec![
+                Span::styled(format!("{status:>12}"), label),
+                Span::styled(format!("{:>10}{:>6} ", format_bytes(session.memory()), human_age(session.process.age)), Style::new().fg(t.text)),
+            ]
         };
-        Row { key, kind: RowKind::Session(s), line: fit(left, right, width) }
+        Row { key, kind: RowKind::Session(s), line: fit_spans(left, right, width) }
     }
 
     fn mark_span(&self, key: &str) -> Span<'static> {
@@ -738,6 +779,7 @@ impl App {
             rows.push(self.note("scanning", &format!("  {} Looking through ~/.claude and your repositories…", self.spinner()), t.dim));
             return rows;
         };
+        let now = scanner::now_ms();
         let (_, open_cwds) = self.open_sessions();
 
         let measured = s.worktrees.iter().filter(|w| w.bytes.is_some()).count();
@@ -763,9 +805,20 @@ impl App {
                 None => String::new(),
             };
             left.push(Span::styled(branch, Style::new().fg(t.info)));
-            let in_use = open_cwds.iter().any(|c| inside(c, &wt.path));
+            // Sessions open in this worktree: working beats idle, so the tag says the most urgent.
+            let here: Vec<&RunningSession> =
+                self.result.as_ref().map(|r| r.sessions.iter().filter(|s| inside(&s.process.cwd, &wt.path)).collect()).unwrap_or_default();
+            let in_use = !here.is_empty() || open_cwds.iter().any(|c| inside(c, &wt.path));
+            let (session_tag, session_color) = if here.iter().any(|s| s.status == Status::Busy) {
+                (" session working".to_string(), t.good)
+            } else if let Some(s) = here.first() {
+                let (label, color, _) = self.session_state(s, now);
+                (format!(" session {label}"), color)
+            } else {
+                (" open session".to_string(), t.good)
+            };
             for (show, text, color) in [
-                (in_use, " open session".to_string(), t.good),
+                (in_use, session_tag, session_color),
                 (wt.dirty.unwrap_or(0) > 0, format!(" {} uncommitted", wt.dirty.unwrap_or(0)), t.warn),
                 (wt.only_here.unwrap_or(0) > 0, format!(" {} commits on no branch", wt.only_here.unwrap_or(0)), t.warn),
                 (wt.locked, " locked".into(), t.warn),
@@ -803,16 +856,25 @@ impl App {
             if let Some(title) = &data.title {
                 left.push(Span::styled(format!(" — {title}"), Style::new().fg(t.text)));
             }
-            let age = if data.open { "open".to_string() } else { data.age.map(human_age).unwrap_or_default() };
-            let right = Span::styled(
-                if self.deleting && self.marked.contains(&key) {
-                    format!("{:>16} ", format!("{} {}", self.spinner(), t.deleting))
-                } else {
-                    format!("{:>10}{:>6} ", format_bytes(data.bytes), age)
-                },
-                Style::new().fg(if data.open { t.dim } else { t.text }),
-            );
-            rows.push(Row { kind: RowKind::SessionData(i), key, line: fit(left, right, width) });
+            // Open sessions say what they are doing instead of how old they are.
+            let (when, when_color, working) = match self.open_session(&data.id) {
+                Some(session) => self.session_state(session, now),
+                None if data.open => ("open".to_string(), t.dim, false),
+                None => (data.age.map(human_age).unwrap_or_default(), t.text, false),
+            };
+            let right = if self.deleting && self.marked.contains(&key) {
+                vec![Span::styled(format!("{:>20} ", format!("{} {}", self.spinner(), t.deleting)), Style::new().fg(t.accent))]
+            } else {
+                let mut style = Style::new().fg(when_color);
+                if working {
+                    style = style.add_modifier(Modifier::BOLD);
+                }
+                vec![
+                    Span::styled(format!("{:>10}", format_bytes(data.bytes)), Style::new().fg(if data.open { t.dim } else { t.text })),
+                    Span::styled(format!("{when:>10} "), style),
+                ]
+            };
+            rows.push(Row { kind: RowKind::SessionData(i), key, line: fit_spans(left, right, width) });
         }
         rows
     }
@@ -980,7 +1042,11 @@ impl App {
                     lines.push(Line::from(value(format!(" {}", d.cwd.clone().unwrap_or_default()))));
                     let mut second = vec![dim(format!(" {}", d.id))];
                     if d.open {
-                        second.push(Span::styled("  open: close it to delete its data", Style::new().fg(t.good)));
+                        let note = match self.open_session(&d.id).map(|s| &s.status) {
+                            Some(Status::Busy) => "  working right now: let it finish and close it to delete its data",
+                            _ => "  open: close it to delete its data",
+                        };
+                        second.push(Span::styled(note, Style::new().fg(t.good)));
                     }
                     lines.push(Line::from(second));
                 }
@@ -1601,7 +1667,12 @@ fn kind_prefix(kind: &RowKind) -> &'static str {
 /// Lays out a row: `left` truncated to fit, `right` against the right edge. Widths are display
 /// columns, so wide characters (kaomoji, CJK) line up too.
 fn fit(left: Vec<Span<'static>>, right: Span<'static>, width: usize) -> Line<'static> {
-    let room = width.saturating_sub(right.width());
+    fit_spans(left, vec![right], width)
+}
+
+/// `fit` with a right side of several differently styled pieces.
+fn fit_spans(left: Vec<Span<'static>>, right: Vec<Span<'static>>, width: usize) -> Line<'static> {
+    let room = width.saturating_sub(right.iter().map(Span::width).sum());
     let mut used = 0;
     let mut spans = Vec::new();
     for span in left {
@@ -1629,7 +1700,7 @@ fn fit(left: Vec<Span<'static>>, right: Span<'static>, width: usize) -> Line<'st
         break;
     }
     spans.push(Span::raw(" ".repeat(room.saturating_sub(used))));
-    spans.push(right);
+    spans.extend(right);
     Line::from(spans)
 }
 
