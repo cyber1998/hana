@@ -105,16 +105,18 @@ On top of that:
 ## ✿ Themes
 
 <p align="center">
-  <img src="docs/themes.svg" alt="The eleven themes: original, kawaii, cyberpunk, neon, tokyo-night, github, matrix, deep-ocean, autumn-forest, cherry-blossom, white-orchard" width="100%">
+  <img src="docs/themes.svg" alt="The eleven themes: cherry-blossom (the default), rust, kawaii, cyberpunk, neon, tokyo-night, github, matrix, deep-ocean, autumn-forest, white-orchard" width="100%">
 </p>
 
-Press `t` / `T` in the app to cycle through them, or pick one directly:
+hana starts in **cherry-blossom**, after its name. **rust** is Rust's own orange on your terminal's background (it used to be called *original*, and that name still works). Press `t` / `T` in the app to cycle through them, or pick one directly:
 
 ```powershell
 hana --theme cherry-blossom
 ```
 
 `hana themes` prints all of them with their colors. Your choice is remembered.
+
+When a cleanup or delete succeeds, a small flower grows in the corner. ✿
 
 ---
 

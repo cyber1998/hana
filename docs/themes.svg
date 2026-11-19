@@ -5,11 +5,11 @@
     .blurb { font-family: Segoe UI, system-ui, -apple-system, sans-serif; font-size: 12px; }
   </style>
 
-  <!-- original: keeps the terminal's background; shown on a neutral dark -->
-  <g transform="translate(20 20)">
+  <!-- rust: keeps the terminal's background; shown on a neutral dark -->
+  <g transform="translate(450 404)">
     <rect width="410" height="84" rx="12" fill="#1C1C1C" stroke="#333" />
     <text x="18" y="30" class="logo" fill="#F74C00">◐ hana</text>
-    <text x="18" y="54" class="name" fill="#E8DCCF">original</text>
+    <text x="18" y="54" class="name" fill="#E8DCCF">rust</text>
     <text x="18" y="72" class="blurb" fill="#8C7B70">rust-orange on your terminal's own background</text>
     <circle cx="380" cy="26" r="8" fill="#F74C00"/><circle cx="358" cy="26" r="8" fill="#DEA584"/><circle cx="336" cy="26" r="8" fill="#8EC07C"/><circle cx="314" cy="26" r="8" fill="#E6B450"/>
   </g>
@@ -87,10 +87,10 @@
   </g>
 
   <!-- cherry-blossom -->
-  <g transform="translate(450 404)">
+  <g transform="translate(20 20)">
     <rect width="410" height="84" rx="12" fill="#1F1520" stroke="#3D2433" />
     <text x="18" y="30" class="logo" fill="#F4A7C0">❀ hana</text>
-    <text x="18" y="54" class="name" fill="#FBE4EC">cherry-blossom</text>
+    <text x="18" y="54" class="name" fill="#FBE4EC">cherry-blossom <tspan fill="#A67F8E">· default</tspan></text>
     <text x="18" y="72" class="blurb" fill="#A67F8E">sakura pink and spring green at dusk</text>
     <circle cx="380" cy="26" r="8" fill="#F4A7C0"/><circle cx="358" cy="26" r="8" fill="#E8B4D8"/><circle cx="336" cy="26" r="8" fill="#B5E8C9"/><circle cx="314" cy="26" r="8" fill="#FFD6A5"/>
   </g>

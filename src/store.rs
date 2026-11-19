@@ -39,7 +39,7 @@ impl Default for Config {
             refresh_interval: 30,
             idle_limit_minutes: 120,
             ends_idle_sessions: false,
-            theme: "original".into(),
+            theme: crate::themes::DEFAULT.name.into(),
             check_for_updates: true,
         }
     }
@@ -61,9 +61,8 @@ impl Config {
         let mut cfg = read(Self::path()).or_else(|| read(Self::dir("seshka"))).unwrap_or_default();
         cfg.idle_limit_minutes = cfg.idle_limit_minutes.max(MINIMUM_IDLE_LIMIT);
         cfg.refresh_interval = cfg.refresh_interval.clamp(5, 3600);
-        if cfg.theme.eq_ignore_ascii_case("classic") {
-            cfg.theme = "original".into();
-        }
+        // Old theme names ("original", "classic") map to their current one.
+        cfg.theme = crate::themes::by_name(&cfg.theme).name.into();
         cfg
     }
 

@@ -1,5 +1,6 @@
 //! hana: cleans up after Claude Code on Windows. Based on jigjoy-ai/seshka.
 
+mod bloom;
 mod disk;
 mod scanner;
 mod store;
@@ -449,7 +450,8 @@ fn show_themes(cfg: &Config) {
     for t in themes::THEMES {
         let mark = if t.name == current { fg(t.accent, "▸") } else { " ".into() };
         let colors: String = [t.bg.unwrap_or(Color::Reset), t.accent, t.info, t.good, t.warn, t.text, t.dim].into_iter().map(swatch).collect();
-        println!(" {mark} {} {colors}  {}", fg(t.accent, &format!("{:<16}", t.name)), fg(t.dim, t.blurb));
+        let default = if std::ptr::eq(t, themes::DEFAULT) { " (default)" } else { "" };
+        println!(" {mark} {} {colors}  {}{default}", fg(t.accent, &format!("{:<16}", t.name)), fg(t.dim, t.blurb));
     }
     println!("\n   Pick one with  hana --theme <name>,  or press t / T in the interactive view.\n");
 }

@@ -66,8 +66,8 @@ const fn rgb(hex: u32) -> Color {
 }
 
 /// Rust's own colors: the rust-orange of its logo, warm greys, and the crab-shell #DEA584.
-pub const ORIGINAL: Theme = Theme {
-    name: "original",
+pub const RUST: Theme = Theme {
+    name: "rust",
     blurb: "rust-orange on your terminal's own background",
     bg: None,
     text: rgb(0xE8DCCF),
@@ -185,7 +185,7 @@ pub const CYBERPUNK: Theme = Theme {
     settings_title: " // SYS.CONFIG ",
     help_title: " // HANA.MANUAL · ANY KEY ",
     key_sep: " │ ",
-    ..ORIGINAL
+    ..RUST
 };
 
 pub const NEON: Theme = Theme {
@@ -212,7 +212,7 @@ pub const NEON: Theme = Theme {
     marked: "◉ ",
     unmarked: "○ ",
     key_sep: " • ",
-    ..ORIGINAL
+    ..RUST
 };
 
 /// After the Tokyo Night palette by enkia.
@@ -239,7 +239,7 @@ pub const TOKYO_NIGHT: Theme = Theme {
     freed: " freed ",
     marked: "◆ ",
     unmarked: "◇ ",
-    ..ORIGINAL
+    ..RUST
 };
 
 /// After GitHub's dark default palette (Primer).
@@ -263,7 +263,7 @@ pub const GITHUB: Theme = Theme {
     freed: " ✓ Freed ",
     marked: "☑ ",
     unmarked: "☐ ",
-    ..ORIGINAL
+    ..RUST
 };
 
 pub const MATRIX: Theme = Theme {
@@ -294,7 +294,7 @@ pub const MATRIX: Theme = Theme {
     unmarked: "[ ] ",
     copied: "> copied",
     key_sep: "  ",
-    ..ORIGINAL
+    ..RUST
 };
 
 pub const DEEP_OCEAN: Theme = Theme {
@@ -322,7 +322,7 @@ pub const DEEP_OCEAN: Theme = Theme {
     freed: " ≋ washed away ",
     marked: "● ",
     unmarked: "○ ",
-    ..ORIGINAL
+    ..RUST
 };
 
 pub const AUTUMN_FOREST: Theme = Theme {
@@ -348,7 +348,7 @@ pub const AUTUMN_FOREST: Theme = Theme {
     freed: " ❦ raked up ",
     marked: "❧ ",
     unmarked: "· ",
-    ..ORIGINAL
+    ..RUST
 };
 
 /// Hana means flower: this one is the namesake.
@@ -378,7 +378,7 @@ pub const CHERRY_BLOSSOM: Theme = Theme {
     marked: "✿ ",
     unmarked: "❀ ",
     key_sep: " · ",
-    ..ORIGINAL
+    ..RUST
 };
 
 /// A light theme: ink on paper, apple red.
@@ -404,19 +404,24 @@ pub const WHITE_ORCHARD: Theme = Theme {
     freed: " ✾ freed ",
     marked: "● ",
     unmarked: "○ ",
-    ..ORIGINAL
+    ..RUST
 };
 
 pub const THEMES: [&Theme; 11] =
-    [&ORIGINAL, &KAWAII, &CYBERPUNK, &NEON, &TOKYO_NIGHT, &GITHUB, &MATRIX, &DEEP_OCEAN, &AUTUMN_FOREST, &CHERRY_BLOSSOM, &WHITE_ORCHARD];
+    [&CHERRY_BLOSSOM, &RUST, &KAWAII, &CYBERPUNK, &NEON, &TOKYO_NIGHT, &GITHUB, &MATRIX, &DEEP_OCEAN, &AUTUMN_FOREST, &WHITE_ORCHARD];
 
-/// The theme with this name (case and spaces/underscores ignored), or the original.
+/// The default look.
+pub const DEFAULT: &Theme = &CHERRY_BLOSSOM;
+
+/// The theme with this name (case and spaces/underscores ignored), or the default.
 pub fn by_name(name: &str) -> &'static Theme {
-    find(name).unwrap_or(&ORIGINAL)
+    find(name).unwrap_or(DEFAULT)
 }
 
 pub fn find(name: &str) -> Option<&'static Theme> {
     let want = name.trim().to_lowercase().replace([' ', '_'], "-");
+    // Earlier names of the rust theme.
+    let want = if want == "original" || want == "classic" { "rust".to_string() } else { want };
     THEMES.iter().copied().find(|t| t.name == want)
 }
 
@@ -434,9 +439,12 @@ mod tests {
     #[test]
     fn names_resolve_and_cycle() {
         assert_eq!(by_name("Tokyo Night").name, "tokyo-night");
-        assert_eq!(by_name("nope").name, "original");
-        assert_eq!(cycle("white-orchard", true).name, "original");
-        assert_eq!(cycle("original", false).name, "white-orchard");
+        assert_eq!(by_name("nope").name, "cherry-blossom");
+        assert_eq!(by_name("original").name, "rust");
+        assert_eq!(by_name("classic").name, "rust");
+        assert_eq!(cycle("white-orchard", true).name, "cherry-blossom");
+        assert_eq!(cycle("cherry-blossom", true).name, "rust");
+        assert_eq!(cycle("cherry-blossom", false).name, "white-orchard");
         let mut names: Vec<&str> = THEMES.iter().map(|t| t.name).collect();
         names.dedup();
         assert_eq!(names.len(), THEMES.len());

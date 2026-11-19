@@ -16,6 +16,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragra
 use ratatui::{DefaultTerminal, Frame};
 use unicode_width::UnicodeWidthChar;
 
+use crate::bloom;
 use crate::disk::{self, Outcome, SessionData, StorageResult, Worktree};
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot, Status};
 use crate::themes::{self, Theme};
@@ -92,6 +93,12 @@ struct App {
     message: Option<(String, Instant)>,
     /// A problem to report, shown until the next key press so it is not missed.
     alert: Option<String>,
+    /// When the flower for the last successful cleanup started growing.
+    bloom: Option<Instant>,
+    /// When the view opened; spinners take their phase from it.
+    started: Instant,
+    /// When the running delete began, and what it is deleting.
+    deleting_since: Option<(Instant, String)>,
     state: ListState,
     selected_key: Option<String>,
     mode: Mode,
@@ -130,6 +137,9 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
         last_auto_end: None,
         message: None,
         alert: None,
+        bloom: None,
+        started: Instant::now(),
+        deleting_since: None,
         state: ListState::default(),
         selected_key: None,
         mode: Mode::Normal,
@@ -176,7 +186,9 @@ impl App {
                 self.refresh();
             }
             terminal.draw(|f| self.draw(f))?;
-            if event::poll(Duration::from_millis(250))? {
+            // Quick redraws only while something moves: the flower, or a spinner.
+            let tick = if self.bloom.is_some() { 60 } else if self.busy() { 90 } else { 250 };
+            if event::poll(Duration::from_millis(tick))? {
                 if let Event::Key(key) = event::read()? {
                     // Windows reports key releases too.
                     if key.kind == KeyEventKind::Press {
@@ -318,6 +330,7 @@ impl App {
             }
             Msg::Deleted(outcome) => {
                 self.deleting = false;
+                self.deleting_since = None;
                 let mut done = Vec::new();
                 if outcome.sessions_deleted > 0 {
                     done.push(format!("{} recycled", plural(outcome.sessions_deleted, "session")));
@@ -368,6 +381,7 @@ impl App {
             _ => (bytes, what),
         };
         self.freed = Some((bytes, what, Instant::now()));
+        self.bloom = Some(Instant::now());
     }
 
     /// Reports something that went wrong; it stays until a key is pressed.
@@ -398,6 +412,15 @@ impl App {
             return;
         }
         self.deleting = true;
+        let bytes: u64 = sessions.iter().map(|d| d.bytes).sum::<u64>() + worktrees.iter().filter_map(|w| w.bytes).sum::<u64>();
+        let mut what = Vec::new();
+        if !worktrees.is_empty() {
+            what.push(plural(worktrees.len(), "worktree"));
+        }
+        if !sessions.is_empty() {
+            what.push(format!("{} of session data", plural(sessions.len(), "session")));
+        }
+        self.deleting_since = Some((Instant::now(), format!("{} · {}", what.join(" and "), format_bytes(bytes))));
         let tx = self.tx.clone();
         thread::spawn(move || {
             // Decide what is open from a fresh scan, not from what was on screen.
@@ -448,6 +471,49 @@ impl App {
             }
             let _ = tx.send(Msg::Updated(result));
         });
+    }
+
+    /// Whether work is running in the background that the user may be waiting on.
+    fn busy(&self) -> bool {
+        self.deleting
+            || self.updating
+            || self.storage_scanning
+            || self.measuring
+            || !self.killing.is_empty()
+            || (self.scanning && self.result.is_none())
+    }
+
+    /// A spinner frame that moves while hana works, so a long delete never looks stuck.
+    fn spinner(&self) -> &'static str {
+        const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        FRAMES[(self.started.elapsed().as_millis() / 90 % 10) as usize]
+    }
+
+    /// What is running, for the header: spinner, what, and for how long when it can take a while.
+    fn activity(&self) -> Option<String> {
+        let sp = self.spinner();
+        let took = |at: &Instant| {
+            let s = at.elapsed().as_secs();
+            if s < 60 { format!("{s}s") } else { format!("{}m {:02}s", s / 60, s % 60) }
+        };
+        if let Some((at, what)) = &self.deleting_since {
+            return Some(format!("{sp} deleting {what} · {}", took(at)));
+        }
+        if self.updating {
+            return Some(format!("{sp} updating hana…"));
+        }
+        if !self.killing.is_empty() {
+            return Some(format!("{sp} ending {}…", plural(self.killing.len(), "process")));
+        }
+        // A first scan is shown in the empty list itself; only rescans need saying up here.
+        if self.view == View::Storage && self.storage_scanning && self.storage.is_some() {
+            return Some(format!("{sp} looking through sessions and repositories…"));
+        }
+        if self.view == View::Storage && self.measuring {
+            let (done, all) = self.storage.as_ref().map(|s| (s.worktrees.iter().filter(|w| w.bytes.is_some()).count(), s.worktrees.len())).unwrap_or((0, 0));
+            return Some(format!("{sp} measuring worktrees {done}/{all}…"));
+        }
+        None
     }
 
     fn unprotected(&self, procs: &[Proc]) -> Vec<Target> {
@@ -516,7 +582,7 @@ impl App {
         let t = self.theme();
         let mut rows = Vec::new();
         let Some(r) = &self.result else {
-            rows.push(self.note("scanning", "  Looking…", t.dim));
+            rows.push(self.note("scanning", &format!("  {} Looking…", self.spinner()), t.dim));
             return rows;
         };
         let now = scanner::now_ms();
@@ -596,7 +662,7 @@ impl App {
         }
         let busy = group.procs.iter().any(|p| self.killing.contains(&p.pid));
         let right = if busy {
-            Span::styled(format!("{:>28} ", t.killing), Style::new().fg(t.accent))
+            Span::styled(format!("{:>28} ", format!("{} {}", self.spinner(), t.killing)), Style::new().fg(t.accent))
         } else {
             Span::raw(format!("{:>12}{:>10}{:>6} ", plural(group.procs.len(), "proc"), format_bytes(group.memory()), human_age(group.oldest())))
         };
@@ -609,7 +675,7 @@ impl App {
         let ports = proc.ports.iter().map(|p| format!(":{p}")).collect::<Vec<_>>().join(" ");
         let killing = self.killing.contains(&proc.pid);
         let right = if killing {
-            Span::styled(format!("{:>28} ", t.killing), Style::new().fg(t.accent))
+            Span::styled(format!("{:>28} ", format!("{} {}", self.spinner(), t.killing)), Style::new().fg(t.accent))
         } else {
             Span::styled(format!("{:>12}{:>10}{:>6} ", ports, format_bytes(proc.memory), human_age(proc.age)), Style::new().fg(t.text))
         };
@@ -646,7 +712,7 @@ impl App {
             left.push(Span::styled(format!(" — {title}"), Style::new().fg(t.text)));
         }
         let right = if self.killing.contains(&session.process.pid) {
-            Span::styled(format!("{:>28} ", t.ending), Style::new().fg(t.accent))
+            Span::styled(format!("{:>28} ", format!("{} {}", self.spinner(), t.ending)), Style::new().fg(t.accent))
         } else {
             Span::styled(
                 format!("{:>12}{:>10}{:>6} ", status, format_bytes(session.memory()), human_age(session.process.age)),
@@ -669,7 +735,7 @@ impl App {
         let t = self.theme();
         let mut rows = Vec::new();
         let Some(s) = &self.storage else {
-            rows.push(self.note("scanning", "  Looking through ~/.claude and your repositories…", t.dim));
+            rows.push(self.note("scanning", &format!("  {} Looking through ~/.claude and your repositories…", self.spinner()), t.dim));
             return rows;
         };
         let (_, open_cwds) = self.open_sessions();
@@ -677,7 +743,7 @@ impl App {
         let measured = s.worktrees.iter().filter(|w| w.bytes.is_some()).count();
         let mut summary = format!("{} · {}", s.worktrees.len(), format_bytes(s.worktree_bytes()));
         if self.measuring {
-            summary.push_str(&format!(" · {} {measured}/{}", t.measuring, s.worktrees.len()));
+            summary.push_str(&format!(" · {} {} {measured}/{}", self.spinner(), t.measuring, s.worktrees.len()));
         }
         rows.push(self.section("WORKTREES", summary));
         if s.worktrees.is_empty() {
@@ -711,9 +777,9 @@ impl App {
                 }
             }
             let size = match wt.bytes {
-                _ if self.deleting && self.marked.contains(&key) => t.deleting.to_string(),
+                _ if self.deleting && self.marked.contains(&key) => format!("{} {}", self.spinner(), t.deleting),
                 Some(b) => format_bytes(b),
-                None => "…".into(),
+                None => self.spinner().into(),
             };
             let sessions = if wt.sessions.is_empty() { String::new() } else { plural(wt.sessions.len(), "session") };
             let right = Span::styled(format!("{:>14}{:>10} ", sessions, size), Style::new().fg(t.text));
@@ -739,7 +805,11 @@ impl App {
             }
             let age = if data.open { "open".to_string() } else { data.age.map(human_age).unwrap_or_default() };
             let right = Span::styled(
-                format!("{:>10}{:>6} ", format_bytes(data.bytes), age),
+                if self.deleting && self.marked.contains(&key) {
+                    format!("{:>16} ", format!("{} {}", self.spinner(), t.deleting))
+                } else {
+                    format!("{:>10}{:>6} ", format_bytes(data.bytes), age)
+                },
                 Style::new().fg(if data.open { t.dim } else { t.text }),
             );
             rows.push(Row { kind: RowKind::SessionData(i), key, line: fit(left, right, width) });
@@ -780,6 +850,13 @@ impl App {
         let selected = index.map(|i| rows[i].kind.clone());
         self.draw_details(f, details, selected.as_ref());
         self.draw_footer(f, footer);
+        if let Some(at) = self.bloom {
+            if at.elapsed() >= bloom::LENGTH {
+                self.bloom = None;
+            } else {
+                bloom::draw(f.buffer_mut(), body, at.elapsed(), t);
+            }
+        }
 
         match &self.mode {
             Mode::Normal => {}
@@ -812,18 +889,16 @@ impl App {
         let mut spans = vec![logo, Span::raw("  "), tab("processes", View::Processes), Span::raw(" "), tab("storage", View::Storage)];
         // Only say something while work is under way.
         let mut status_color = t.dim;
-        let status = match self.view {
-            View::Storage if self.deleting => t.deleting.to_string(),
-            View::Storage if self.storage_scanning => "looking…".to_string(),
-            View::Processes if self.scanning && self.result.is_none() => "scanning…".to_string(),
-            _ if self.updating => "updating…".to_string(),
-            _ => match &self.update {
-                Some(tag) => {
-                    status_color = t.accent;
-                    format!("{tag} available · U")
-                }
-                None => String::new(),
-            },
+        let status = match (self.activity(), &self.update) {
+            (Some(doing), _) => {
+                status_color = t.info;
+                doing
+            }
+            (None, Some(tag)) => {
+                status_color = t.accent;
+                format!("{tag} available · U")
+            }
+            (None, None) => String::new(),
         };
         let used: usize = spans.iter().map(Span::width).sum();
         let status_width = Span::raw(status.as_str()).width();
