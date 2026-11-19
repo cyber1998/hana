@@ -90,6 +90,8 @@ struct App {
     freed: Option<(u64, String, Instant)>,
     last_auto_end: Option<(usize, SystemTime)>,
     message: Option<(String, Instant)>,
+    /// A problem to report, shown until the next key press so it is not missed.
+    alert: Option<String>,
     state: ListState,
     selected_key: Option<String>,
     mode: Mode,
@@ -127,6 +129,7 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
         freed: None,
         last_auto_end: None,
         message: None,
+        alert: None,
         state: ListState::default(),
         selected_key: None,
         mode: Mode::Normal,
@@ -277,7 +280,7 @@ impl App {
                     self.announce_freed(report.freed, format!("{what} {}", self.theme().killed_verb));
                 }
                 if !report.survivors.is_empty() {
-                    self.say(format!(
+                    self.alert(format!(
                         "{} could not be ended (it may be elevated or another user's)",
                         plural(report.survivors.len(), "process")
                     ));
@@ -326,8 +329,12 @@ impl App {
                     self.announce_freed(outcome.freed, done.join(", "));
                 }
                 if !outcome.problems.is_empty() {
-                    let more = if outcome.problems.len() > 2 { format!(" (+{} more)", outcome.problems.len() - 2) } else { String::new() };
-                    self.say(format!("{}{more}", outcome.problems.iter().take(2).cloned().collect::<Vec<_>>().join(" · ")));
+                    let mut text = vec!["Not everything could be deleted:".to_string(), String::new()];
+                    text.extend(outcome.problems.iter().take(6).map(|p| format!("• {p}")));
+                    if outcome.problems.len() > 6 {
+                        text.push(format!("• and {} more", outcome.problems.len() - 6));
+                    }
+                    self.alert(text.join("\n"));
                 }
                 self.marked.clear();
                 self.storage_scanning = false;
@@ -347,7 +354,7 @@ impl App {
                         self.update = None;
                         self.say(format!("Updated to {tag}. Restart hana to use it."));
                     }
-                    Err(e) => self.say(format!("Update failed: {e}")),
+                    Err(e) => self.alert(format!("The update failed: {e}")),
                 }
             }
             // Results of a superseded storage scan.
@@ -361,6 +368,11 @@ impl App {
             _ => (bytes, what),
         };
         self.freed = Some((bytes, what, Instant::now()));
+    }
+
+    /// Reports something that went wrong; it stays until a key is pressed.
+    fn alert(&mut self, text: impl Into<String>) {
+        self.alert = Some(text.into());
     }
 
     fn say(&mut self, text: impl Into<String>) {
@@ -778,6 +790,9 @@ impl App {
             Mode::Settings { field, editing } => self.draw_settings(f, *field, editing.as_deref()),
             Mode::Help => self.draw_help(f),
         }
+        if let Some(text) = &self.alert {
+            self.draw_alert(f, text);
+        }
     }
 
     fn draw_header(&self, f: &mut Frame, area: Rect) {
@@ -939,6 +954,22 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
+    fn draw_alert(&self, f: &mut Frame, text: &str) {
+        let t = self.theme();
+        let width = 72u16;
+        // Rough wrapped height: each line of text over the inner width, plus padding and the hint.
+        let inner = width as usize - 4;
+        let rows: usize = text.lines().map(|l| Span::raw(l).width().div_ceil(inner).max(1)).sum();
+        let area = centered(f.area(), width, rows as u16 + 5);
+        f.render_widget(Clear, area);
+        let mut lines = vec![Line::default()];
+        lines.extend(text.lines().map(|l| Line::from(Span::styled(format!(" {l}"), Style::new().fg(t.text)))));
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(" any key to close", Style::new().fg(t.dim))));
+        let block = Block::bordered().border_type(t.border).style(t.base()).title(" ⚠ ").border_style(Style::new().fg(t.warn));
+        f.render_widget(Paragraph::new(lines).block(block).wrap(Wrap { trim: false }), area);
+    }
+
     fn draw_confirm(&self, f: &mut Frame, question: &str, risky: bool) {
         let t = self.theme();
         let height = question.lines().count() as u16 + 6;
@@ -1042,6 +1073,10 @@ impl App {
             self.quit = true;
             return;
         }
+        // A key press dismisses an alert, and does nothing else.
+        if self.alert.take().is_some() {
+            return;
+        }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Normal => self.on_normal_key(key),
             Mode::Help => {}
@@ -1058,7 +1093,12 @@ impl App {
     fn run(&mut self, action: Pending, force: bool) {
         match action {
             Pending::Kill(targets) => self.kill(targets),
-            Pending::Delete { sessions, worktrees, .. } => self.delete(sessions, worktrees, force),
+            Pending::Delete { sessions, worktrees, .. } => {
+                // Rows show "deleting…" while it runs, including a selected row that was not marked.
+                self.marked.extend(sessions.iter().map(|d| format!("sd:{}", d.id)));
+                self.marked.extend(worktrees.iter().map(|w| format!("wt:{}", w.path)));
+                self.delete(sessions, worktrees, force)
+            }
             Pending::Update(tag) => self.install_update(tag),
         }
     }
