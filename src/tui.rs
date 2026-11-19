@@ -580,17 +580,22 @@ impl App {
         Row { kind: RowKind::Note, key: key.into(), line: Line::default() }
     }
 
-    fn section(&self, title: &str, summary: String) -> Row {
+    /// A section heading. `columns` labels the right-hand columns of the rows below it, formatted
+    /// with the same widths those rows use, so each label sits over its column.
+    fn section(&self, title: &str, summary: String, columns: String, width: usize) -> Row {
         let t = self.theme();
         let title = if t.lowercase_sections { title.to_lowercase() } else { title.to_string() };
-        Row {
-            kind: RowKind::Section,
-            key: format!("sec:{title}"),
-            line: Line::from(vec![
-                Span::styled(format!("{}{title}{}", t.section_left, t.section_right), Style::new().fg(t.accent).add_modifier(Modifier::BOLD)),
-                Span::styled(if summary.is_empty() { String::new() } else { format!("  {summary}") }, Style::new().fg(t.dim)),
-            ]),
-        }
+        let left = vec![
+            Span::styled(format!("{}{title}{}", t.section_left, t.section_right), Style::new().fg(t.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(if summary.is_empty() { String::new() } else { format!("  {summary}") }, Style::new().fg(t.dim)),
+        ];
+        let right = vec![Span::styled(columns, Style::new().fg(t.dim).add_modifier(Modifier::ITALIC))];
+        Row { kind: RowKind::Section, key: format!("sec:{title}"), line: fit_spans(left, right, width) }
+    }
+
+    /// Column labels for process rows (left behind and in other sessions) and open sessions.
+    fn process_columns(first: &str) -> String {
+        format!("{first:>12}{:>10}{:>6} ", "memory", "age")
     }
 
     fn process_rows(&self, width: usize) -> Vec<Row> {
@@ -609,7 +614,8 @@ impl App {
                 line: Line::from(Span::styled(format!(" {}", t.clean.trim()), Style::new().fg(t.good))),
             });
         } else {
-            rows.push(self.section("LEFT BEHIND", format!("{} · {}", plural(r.orphan_count(), "process"), format_bytes(r.orphan_memory()))));
+            let summary = format!("{} · {}", plural(r.orphan_count(), "process"), format_bytes(r.orphan_memory()));
+            rows.push(self.section("LEFT BEHIND", summary, Self::process_columns("ports"), width));
             for (g, group) in r.orphans.iter().enumerate() {
                 let row = self.group_row(RowKind::Orphan(g), group, true, width);
                 let open = self.expanded(&row.key, true);
@@ -625,7 +631,8 @@ impl App {
         rows.push(Self::gap("gap1"));
         let idle_count = r.idle_sessions(&self.cfg).len();
         let summary = if idle_count > 0 { format!("{} idle over {}", idle_count, format_limit(self.cfg.idle_limit_minutes)) } else { String::new() };
-        rows.push(self.section("OPEN SESSIONS", summary));
+        let columns = if r.sessions.is_empty() { String::new() } else { Self::process_columns("status") };
+        rows.push(self.section("OPEN SESSIONS", summary, columns, width));
         if r.sessions.is_empty() {
             rows.push(self.note("nosessions", t.no_sessions, t.dim));
         }
@@ -642,7 +649,7 @@ impl App {
 
         if !r.live.is_empty() {
             rows.push(Self::gap("gap2"));
-            rows.push(self.section("IN OTHER SESSIONS", String::new()));
+            rows.push(self.section("IN OTHER SESSIONS", String::new(), Self::process_columns("ports"), width));
             for (g, group) in r.live.iter().enumerate() {
                 let row = self.group_row(RowKind::Live(g), group, false, width);
                 let open = self.expanded(&row.key, false);
@@ -783,11 +790,12 @@ impl App {
         let (_, open_cwds) = self.open_sessions();
 
         let measured = s.worktrees.iter().filter(|w| w.bytes.is_some()).count();
-        let mut summary = format!("{} · {}", s.worktrees.len(), format_bytes(s.worktree_bytes()));
+        let mut summary = if s.worktrees.is_empty() { String::new() } else { format!("{} · {}", s.worktrees.len(), format_bytes(s.worktree_bytes())) };
         if self.measuring {
             summary.push_str(&format!(" · {} {} {measured}/{}", self.spinner(), t.measuring, s.worktrees.len()));
         }
-        rows.push(self.section("WORKTREES", summary));
+        let columns = if s.worktrees.is_empty() { String::new() } else { format!("{:>14}{:>10} ", "sessions", "size") };
+        rows.push(self.section("WORKTREES", summary, columns, width));
         if s.worktrees.is_empty() {
             rows.push(self.note("nowt", "  No worktrees in the repositories your sessions worked in.", t.dim));
         }
@@ -845,7 +853,8 @@ impl App {
         if old > 0 {
             summary.push_str(&format!(" · {old} older than 30 days"));
         }
-        rows.push(self.section("SESSION DATA", summary));
+        let columns = if s.sessions.is_empty() { String::new() } else { format!("{:>10}{:>12} ", "size", "last used") };
+        rows.push(self.section("SESSION DATA", summary, columns, width));
         if s.sessions.is_empty() {
             rows.push(self.note("nodata", t.no_data, t.dim));
         }
@@ -863,7 +872,7 @@ impl App {
                 None => (data.age.map(human_age).unwrap_or_default(), t.text, false),
             };
             let right = if self.deleting && self.marked.contains(&key) {
-                vec![Span::styled(format!("{:>20} ", format!("{} {}", self.spinner(), t.deleting)), Style::new().fg(t.accent))]
+                vec![Span::styled(format!("{:>22} ", format!("{} {}", self.spinner(), t.deleting)), Style::new().fg(t.accent))]
             } else {
                 let mut style = Style::new().fg(when_color);
                 if working {
@@ -871,7 +880,7 @@ impl App {
                 }
                 vec![
                     Span::styled(format!("{:>10}", format_bytes(data.bytes)), Style::new().fg(if data.open { t.dim } else { t.text })),
-                    Span::styled(format!("{when:>10} "), style),
+                    Span::styled(format!("{when:>12} "), style),
                 ]
             };
             rows.push(Row { kind: RowKind::SessionData(i), key, line: fit_spans(left, right, width) });
