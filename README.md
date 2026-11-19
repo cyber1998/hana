@@ -17,6 +17,10 @@
 
 <p align="center"><sub><i>hana</i> (花) means <i>flower</i>.</sub></p>
 
+<p align="center">
+  <img src="docs/screens/processes.svg" alt="hana's processes tab: two closed sessions' leftover processes (a Vite dev server, a TypeScript watcher, a Playwright browser and a Python API server) with their ports, memory and age, and two open sessions, one working and one idle" width="100%">
+</p>
+
 ---
 
 ## ✿ Credits
@@ -99,6 +103,16 @@ On top of that:
 - **Idle sessions can be ended**, either when you ask or automatically after a limit you set. Auto-ending is off by default.
 - **Protected programs** are never touched by bulk kills.
 - **Eleven themes**, shown below.
+
+<p align="center">
+  <img src="docs/screens/storage.svg" alt="hana's storage tab: two git worktrees with their sizes, one with uncommitted changes, and eight sessions' data with size and when each was last used, two old ones marked for deletion" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screens/cleanup.svg" alt="hana after a cleanup in the kawaii theme: 965 MB freed, nothing left behind, and a small flower blooming in the corner" width="100%">
+</p>
+
+<p align="center"><sub>Screens are drawn by hana itself from made-up sessions: <code>cargo test --release readme_screens -- --ignored</code> redraws them.</sub></p>
 
 ---
 

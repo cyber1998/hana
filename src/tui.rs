@@ -127,40 +127,7 @@ struct App {
 
 pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let (tx, rx) = mpsc::channel();
-    let mut app = App {
-        cfg: cfg.clone(),
-        result: None,
-        scanning: false,
-        rescan_when_done: false,
-        last_scan: None,
-        killing: HashSet::new(),
-        freed: None,
-        last_auto_end: None,
-        message: None,
-        alert: None,
-        bloom: None,
-        started: Instant::now(),
-        status_checked: Instant::now(),
-        deleting_since: None,
-        state: ListState::default(),
-        selected_key: None,
-        mode: Mode::Normal,
-        tx,
-        rx,
-        quit: false,
-        view: View::Processes,
-        other_selection: (ListState::default(), None),
-        storage: None,
-        storage_scanning: false,
-        storage_generation: 0,
-        measuring: false,
-        deleting: false,
-        marked: HashSet::new(),
-        toggled: HashSet::new(),
-        update: None,
-        updating: false,
-    };
+    let mut app = App::new(cfg.clone());
     app.refresh();
     if app.cfg.check_for_updates {
         app.check_for_update(false);
@@ -175,6 +142,43 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
 }
 
 impl App {
+    fn new(cfg: Config) -> App {
+        let (tx, rx) = mpsc::channel();
+        App {
+            cfg,
+            result: None,
+            scanning: false,
+            rescan_when_done: false,
+            last_scan: None,
+            killing: HashSet::new(),
+            freed: None,
+            last_auto_end: None,
+            message: None,
+            alert: None,
+            bloom: None,
+            started: Instant::now(),
+            status_checked: Instant::now(),
+            deleting_since: None,
+            state: ListState::default(),
+            selected_key: None,
+            mode: Mode::Normal,
+            tx,
+            rx,
+            quit: false,
+            view: View::Processes,
+            other_selection: (ListState::default(), None),
+            storage: None,
+            storage_scanning: false,
+            storage_generation: 0,
+            measuring: false,
+            deleting: false,
+            marked: HashSet::new(),
+            toggled: HashSet::new(),
+            update: None,
+            updating: false,
+        }
+    }
+
     fn theme(&self) -> &'static Theme {
         themes::by_name(&self.cfg.theme)
     }
@@ -1730,3 +1734,6 @@ fn copy_to_clipboard(text: &str) -> io::Result<()> {
     child.wait()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod screens;

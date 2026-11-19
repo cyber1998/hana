@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="901.6" height="436" viewBox="0 0 901.6 436" role="img" aria-label="hana · storage">
+<style>text{font-family:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,Menlo,monospace;font-size:14px;white-space:pre} .ui{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;font-size:12px}</style>
+<rect width="901.6" height="436" rx="8" fill="#202020"/>
+<rect x="0.5" y="0.5" width="900.6" height="435" rx="8" fill="none" stroke="#3a3a3a"/>
+<path d="M8 30 V12 a6 6 0 0 1 6 -6 H226 a6 6 0 0 1 6 6 V30 Z" fill="#1F1520"/>
+<g fill="none" stroke="#FBE4EC" stroke-opacity="0.75" stroke-width="1.2" stroke-linecap="round"><path d="M20 15 l3.5 3 l-3.5 3"/><path d="M25.5 21.5 h5"/></g>
+<text class="ui" x="40" y="22" fill="#FBE4EC">hana · storage</text>
+<g stroke="#FBE4EC" stroke-opacity="0.6" stroke-width="1.1" fill="none"><path d="M212 14.5 l6 6 M218 14.5 l-6 6"/><path d="M248 18 h10 M253 13 v10"/><path d="M270 16.5 l3.5 3.5 l3.5 -3.5"/></g>
+<g stroke="#FBE4EC" stroke-opacity="0.8" stroke-width="1" fill="none"><path d="M760.6 18.5 h10"/><rect x="806.1" y="13.5" width="9" height="9" rx="1.5"/><path d="M861.1 13.5 l9 9 M870.1 13.5 l-9 9"/></g>
+<rect y="30" width="901.6" height="398" fill="#1F1520"/>
+<path d="M0 428 H901.6 V428 a8 8 0 0 1 -8 8 H8 a8 8 0 0 1 -8 -8 Z" fill="#1F1520"/>
+<rect x="190.4" y="44.0" width="75.6" height="18" fill="#F4A7C0"/>
+<text x="14.0" y="57.5" textLength="58.8" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;"> ❀ hana</text>
+<text x="89.6" y="57.5" textLength="92.4" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> processes </text>
+<text x="190.4" y="57.5" textLength="75.6" lengthAdjust="spacingAndGlyphs" fill="#1F1520" style="font-weight:700;"> storage </text>
+<text x="14.0" y="75.5" textLength="151.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style=""> 2 marked · 207 MB</text>
+<text x="14.0" y="93.5" textLength="100.8" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;"> ❀ worktrees</text>
+<text x="114.8" y="93.5" textLength="100.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">  2 · 7.5 GB</text>
+<text x="669.2" y="93.5" textLength="210.0" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="font-style:italic;">      sessions      size </text>
+<text x="14.0" y="111.5" textLength="58.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ game</text>
+<text x="72.8" y="111.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style=""> ⑂ </text>
+<text x="98.0" y="111.5" textLength="126.0" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">renderer-77c0d1</text>
+<text x="224.0" y="111.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#E8B4D8" style="">  detached</text>
+<text x="308.0" y="111.5" textLength="579.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="">                                                1 session    6.3 GB  </text>
+<text x="14.0" y="129.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ webshop</text>
+<text x="98.0" y="129.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style=""> ⑂ </text>
+<text x="123.2" y="129.5" textLength="126.0" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">checkout-91be04</text>
+<text x="249.2" y="129.5" textLength="159.6" lengthAdjust="spacingAndGlyphs" fill="#E8B4D8" style="">  checkout-redesign</text>
+<text x="408.8" y="129.5" textLength="134.4" lengthAdjust="spacingAndGlyphs" fill="#FFD6A5" style=""> · 3 uncommitted</text>
+<text x="543.2" y="129.5" textLength="344.4" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="">                    1 session    1.2 GB  </text>
+<text x="14.0" y="165.5" textLength="126.0" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;"> ❀ session data</text>
+<text x="140.0" y="165.5" textLength="369.6" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">  8 sessions · 733 MB · 3 older than 30 days</text>
+<text x="686.0" y="165.5" textLength="193.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="font-style:italic;">      size   last used </text>
+<text x="14.0" y="183.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="183.5" textLength="75.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">docs-site</text>
+<text x="114.8" y="183.5" textLength="571.2" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Search page                                                      </text>
+<text x="686.0" y="183.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">    212 MB</text>
+<text x="770.0" y="183.5" textLength="109.2" lengthAdjust="spacingAndGlyphs" fill="#B5E8C9" style="font-weight:700;">     working </text>
+<text x="14.0" y="201.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="201.5" textLength="58.8" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">webshop</text>
+<text x="98.0" y="201.5" textLength="789.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Checkout redesign                                                      164 MB          2d  </text>
+<text x="14.0" y="219.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style=""> ✿ </text>
+<text x="39.2" y="219.5" textLength="184.8" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">game ⑂ renderer-77c0d1</text>
+<text x="224.0" y="219.5" textLength="663.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Shadow cascades                                         131 MB         41d  </text>
+<text x="14.0" y="237.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="237.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">api-server</text>
+<text x="123.2" y="237.5" textLength="764.4" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Rate limiter                                                         88 MB          1d  </text>
+<rect x="14.0" y="242.0" width="873.6" height="18" fill="#3D2433"/>
+<text x="14.0" y="255.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style=""> ✿ </text>
+<text x="39.2" y="255.5" textLength="159.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">game ⑂ audio-5e2b90</text>
+<text x="198.8" y="255.5" textLength="688.8" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Footstep sounds                                             76 MB         38d  </text>
+<text x="14.0" y="273.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="273.5" textLength="58.8" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">webshop</text>
+<text x="98.0" y="273.5" textLength="789.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — Fix flaky cart test                                                     41 MB          9d  </text>
+<text x="14.0" y="291.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="291.5" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">dotfiles</text>
+<text x="106.4" y="291.5" textLength="781.2" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — PowerShell prompt                                                      12 MB         63d  </text>
+<text x="14.0" y="309.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> ❀ </text>
+<text x="39.2" y="309.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="font-weight:700;">api-server</text>
+<text x="123.2" y="309.5" textLength="764.4" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> — OpenAPI docs                                                          9 MB         17d  </text>
+<text x="14.0" y="363.5" textLength="873.6" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="14.0" y="381.5" textLength="873.6" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> D:\code\game                                                                                           </text>
+<text x="14.0" y="399.5" textLength="310.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> a1b2c3d4-0000-4000-8000-000000000004</text>
+<text x="22.4" y="417.5" textLength="42.0" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">space</text>
+<text x="64.4" y="417.5" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> mark · </text>
+<text x="131.6" y="417.5" textLength="8.4" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">x</text>
+<text x="140.0" y="417.5" textLength="84.0" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> delete · </text>
+<text x="224.0" y="417.5" textLength="25.2" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">tab</text>
+<text x="249.2" y="417.5" textLength="109.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> processes · </text>
+<text x="358.4" y="417.5" textLength="8.4" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">?</text>
+<text x="366.8" y="417.5" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> more · </text>
+<text x="434.0" y="417.5" textLength="8.4" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">q</text>
+<text x="442.4" y="417.5" textLength="42.0" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> quit</text>
+</svg>
