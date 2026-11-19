@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="604" viewBox="0 0 880 604" role="img" aria-label="hana's eleven themes">
+  <style>
+    .logo { font-family: Cascadia Code, Consolas, ui-monospace, monospace; font-size: 18px; font-weight: 700; }
+    .name { font-family: Cascadia Code, Consolas, ui-monospace, monospace; font-size: 14px; }
+    .blurb { font-family: Segoe UI, system-ui, -apple-system, sans-serif; font-size: 12px; }
+  </style>
+
+  <!-- original: keeps the terminal's background; shown on a neutral dark -->
+  <g transform="translate(20 20)">
+    <rect width="410" height="84" rx="12" fill="#1C1C1C" stroke="#333" />
+    <text x="18" y="30" class="logo" fill="#F74C00">◐ hana</text>
+    <text x="18" y="54" class="name" fill="#E8DCCF">original</text>
+    <text x="18" y="72" class="blurb" fill="#8C7B70">rust-orange on your terminal's own background</text>
+    <circle cx="380" cy="26" r="8" fill="#F74C00"/><circle cx="358" cy="26" r="8" fill="#DEA584"/><circle cx="336" cy="26" r="8" fill="#8EC07C"/><circle cx="314" cy="26" r="8" fill="#E6B450"/>
+  </g>
+
+  <!-- kawaii -->
+  <g transform="translate(450 20)">
+    <rect width="410" height="84" rx="12" fill="#1E1A26" stroke="#3A3046" />
+    <text x="18" y="30" class="logo" fill="#FF79C6">(≧◡≦) hana</text>
+    <text x="18" y="54" class="name" fill="#F0E4FF">kawaii</text>
+    <text x="18" y="72" class="blurb" fill="#968AB4">pastel pinks, kaomoji and hearts</text>
+    <circle cx="380" cy="26" r="8" fill="#FF79C6"/><circle cx="358" cy="26" r="8" fill="#96CDFF"/><circle cx="336" cy="26" r="8" fill="#78E8C0"/><circle cx="314" cy="26" r="8" fill="#FFC88C"/>
+  </g>
+
+  <!-- cyberpunk -->
+  <g transform="translate(20 116)">
+    <rect width="410" height="84" rx="12" fill="#0D0221" stroke="#2A0A4A" />
+    <text x="18" y="30" class="logo" fill="#FF2A6D">▚▞ HANA//</text>
+    <text x="18" y="54" class="name" fill="#D1F7FF">cyberpunk</text>
+    <text x="18" y="72" class="blurb" fill="#6B5B95">hot pink and electric cyan on midnight purple</text>
+    <circle cx="380" cy="26" r="8" fill="#FF2A6D"/><circle cx="358" cy="26" r="8" fill="#05D9E8"/><circle cx="336" cy="26" r="8" fill="#01FFC3"/><circle cx="314" cy="26" r="8" fill="#F9F002"/>
+  </g>
+
+  <!-- neon -->
+  <g transform="translate(450 116)">
+    <rect width="410" height="84" rx="12" fill="#0A0A12" stroke="#1E1E3F" />
+    <text x="18" y="30" class="logo" fill="#FF00FF">✦ hana ✦</text>
+    <text x="18" y="54" class="name" fill="#FFFFFF">neon</text>
+    <text x="18" y="72" class="blurb" fill="#7A7A9D">glowing magenta, cyan and lime on black</text>
+    <circle cx="380" cy="26" r="8" fill="#FF00FF"/><circle cx="358" cy="26" r="8" fill="#00FFFF"/><circle cx="336" cy="26" r="8" fill="#39FF14"/><circle cx="314" cy="26" r="8" fill="#FFFF00"/>
+  </g>
+
+  <!-- tokyo-night -->
+  <g transform="translate(20 212)">
+    <rect width="410" height="84" rx="12" fill="#1A1B26" stroke="#283457" />
+    <text x="18" y="30" class="logo" fill="#7AA2F7">夜 hana</text>
+    <text x="18" y="54" class="name" fill="#C0CAF5">tokyo-night</text>
+    <text x="18" y="72" class="blurb" fill="#565F89">the soft blues of Tokyo Night</text>
+    <circle cx="380" cy="26" r="8" fill="#7AA2F7"/><circle cx="358" cy="26" r="8" fill="#7DCFFF"/><circle cx="336" cy="26" r="8" fill="#9ECE6A"/><circle cx="314" cy="26" r="8" fill="#E0AF68"/>
+  </g>
+
+  <!-- github -->
+  <g transform="translate(450 212)">
+    <rect width="410" height="84" rx="12" fill="#0D1117" stroke="#30363D" />
+    <text x="18" y="30" class="logo" fill="#2F81F7">✓ hana</text>
+    <text x="18" y="54" class="name" fill="#E6EDF3">github</text>
+    <text x="18" y="72" class="blurb" fill="#7D8590">GitHub dark: Primer blues and greens</text>
+    <circle cx="380" cy="26" r="8" fill="#2F81F7"/><circle cx="358" cy="26" r="8" fill="#A5D6FF"/><circle cx="336" cy="26" r="8" fill="#3FB950"/><circle cx="314" cy="26" r="8" fill="#D29922"/>
+  </g>
+
+  <!-- matrix -->
+  <g transform="translate(20 308)">
+    <rect width="410" height="84" rx="12" fill="#000000" stroke="#003B00" />
+    <text x="18" y="30" class="logo" fill="#00FF41">⣿ hana</text>
+    <text x="18" y="54" class="name" fill="#00FF41">matrix</text>
+    <text x="18" y="72" class="blurb" fill="#008F11">phosphor green on black</text>
+    <circle cx="380" cy="26" r="8" fill="#00FF41"/><circle cx="358" cy="26" r="8" fill="#39FF14"/><circle cx="336" cy="26" r="8" fill="#9CFF9C"/><circle cx="314" cy="26" r="8" fill="#CCFF00"/>
+  </g>
+
+  <!-- deep-ocean -->
+  <g transform="translate(450 308)">
+    <rect width="410" height="84" rx="12" fill="#0B1622" stroke="#13293D" />
+    <text x="18" y="30" class="logo" fill="#2EC4B6">≋ hana</text>
+    <text x="18" y="54" class="name" fill="#CFE8F5">deep-ocean</text>
+    <text x="18" y="72" class="blurb" fill="#4E6A80">teal and foam on the dark of the deep</text>
+    <circle cx="380" cy="26" r="8" fill="#2EC4B6"/><circle cx="358" cy="26" r="8" fill="#5DADE2"/><circle cx="336" cy="26" r="8" fill="#7FDBCA"/><circle cx="314" cy="26" r="8" fill="#F4D35E"/>
+  </g>
+
+  <!-- autumn-forest -->
+  <g transform="translate(20 404)">
+    <rect width="410" height="84" rx="12" fill="#1C1410" stroke="#3A2A1E" />
+    <text x="18" y="30" class="logo" fill="#D9822B">❦ hana</text>
+    <text x="18" y="54" class="name" fill="#EADBC8">autumn-forest</text>
+    <text x="18" y="72" class="blurb" fill="#8A7560">maple orange, moss and gold on bark brown</text>
+    <circle cx="380" cy="26" r="8" fill="#D9822B"/><circle cx="358" cy="26" r="8" fill="#C9A227"/><circle cx="336" cy="26" r="8" fill="#8DA35F"/><circle cx="314" cy="26" r="8" fill="#E4B363"/>
+  </g>
+
+  <!-- cherry-blossom -->
+  <g transform="translate(450 404)">
+    <rect width="410" height="84" rx="12" fill="#1F1520" stroke="#3D2433" />
+    <text x="18" y="30" class="logo" fill="#F4A7C0">❀ hana</text>
+    <text x="18" y="54" class="name" fill="#FBE4EC">cherry-blossom</text>
+    <text x="18" y="72" class="blurb" fill="#A67F8E">sakura pink and spring green at dusk</text>
+    <circle cx="380" cy="26" r="8" fill="#F4A7C0"/><circle cx="358" cy="26" r="8" fill="#E8B4D8"/><circle cx="336" cy="26" r="8" fill="#B5E8C9"/><circle cx="314" cy="26" r="8" fill="#FFD6A5"/>
+  </g>
+
+  <!-- white-orchard -->
+  <g transform="translate(235 500)">
+    <rect width="410" height="84" rx="12" fill="#FAF8F2" stroke="#E2DACB" />
+    <text x="18" y="30" class="logo" fill="#C0392B">✾ hana</text>
+    <text x="18" y="54" class="name" fill="#3B3A36">white-orchard</text>
+    <text x="18" y="72" class="blurb" fill="#9A968A">light: apple red and leaf green on paper</text>
+    <circle cx="380" cy="26" r="8" fill="#C0392B"/><circle cx="358" cy="26" r="8" fill="#2E7D6B"/><circle cx="336" cy="26" r="8" fill="#4C8C3F"/><circle cx="314" cy="26" r="8" fill="#B7791F"/>
+  </g>
+</svg>

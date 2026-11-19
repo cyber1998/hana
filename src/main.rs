@@ -1,8 +1,9 @@
-//! seshka for Windows: kill what Claude Code left behind.
+//! hana: cleans up after Claude Code on Windows. Based on jigjoy-ai/seshka.
 
 mod disk;
 mod scanner;
 mod store;
+mod themes;
 mod tui;
 mod win;
 
@@ -13,42 +14,60 @@ use std::time::Duration;
 use store::{format_bytes, human_age, plural, Config, Target};
 
 const HELP: &str = "\
-seshka - kill what Claude Code left behind (Windows)
+hana - cleans up after Claude Code on Windows
 
-Usage:
-  seshka [--storage]     Open the interactive view (on the storage tab)
-  seshka list [--json]   Print leftovers and open sessions, then exit
-  seshka kill-all [-y]   Kill every leftover process (except protected ones)
-  seshka kill-idle [-y]  End sessions idle longer than the limit (see settings)
-  seshka config          Print where settings are kept, and what they are
-  seshka --help | --version
+Processes:
+  hana [--storage]                     Open the interactive view (on the storage tab)
+  hana list [--json]                   Print leftovers and open sessions, then exit
+  hana kill-all [-y]                   Kill every leftover process (except protected ones)
+  hana kill-idle [-y]                  End sessions idle longer than the limit (see settings)
 
 Storage:
-  seshka disk [--json]                     How much each worktree and each session's data weighs
-  seshka delete-session <id>... [-y]       Move sessions' data to the Recycle Bin (ID or its prefix)
-  seshka remove-worktree <path|name> [--force] [-y]
-                                           git worktree remove; --force also takes uncommitted work
+  hana disk [--json]                   How much each worktree and each session's data weighs
+  hana delete-session <id>... [-y]     Move sessions' data to the Recycle Bin (ID or its prefix)
+  hana remove-worktree <path|name> [--force] [-y]
+                                       git worktree remove; --force also drops uncommitted work
 
-Look:
-  seshka --kawaii | --classic              Switch the interactive view's look (remembered)
+Looks:
+  hana themes                          Show every theme with its colors
+  hana --theme <name>                  Pick a theme (remembered); t / T cycle in the view
 
-Settings live in %APPDATA%\\seshka\\config.json and can be changed from the interactive view (s).
+Other:
+  hana config                          Print where settings are kept, and what they are
+  hana --help | --version
+
+Settings live in %APPDATA%\\hana\\config.json and can be changed from the interactive view (s).
 ";
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let mut cfg = Config::load();
+    // --theme NAME or --theme=NAME; taken out so NAME is not read as a command.
+    let theme_at = args.iter().position(|a| a == "--theme" || a.starts_with("--theme="));
+    if let Some(at) = theme_at {
+        let flag = args.remove(at);
+        let name = match flag.strip_prefix("--theme=") {
+            Some(name) => Some(name.to_string()),
+            None if at < args.len() => Some(args.remove(at)),
+            None => None,
+        };
+        match name.as_deref().and_then(themes::find) {
+            Some(theme) => {
+                cfg.theme = theme.name.into();
+                let _ = cfg.save();
+            }
+            None => {
+                let names: Vec<&str> = themes::THEMES.iter().map(|t| t.name).collect();
+                eprintln!("hana: --theme takes one of: {}", names.join(", "));
+                return ExitCode::from(2);
+            }
+        }
+    }
     let yes = args.iter().any(|a| a == "-y" || a == "--yes");
     let json = args.iter().any(|a| a == "--json");
     let force = args.iter().any(|a| a == "--force");
     let command = args.iter().find(|a| !a.starts_with('-')).map(String::as_str);
     let operands: Vec<&str> = args.iter().filter(|a| !a.starts_with('-')).skip(1).map(String::as_str).collect();
-    let mut cfg = Config::load();
-    for (flag, theme) in [("--kawaii", "kawaii"), ("--classic", "classic")] {
-        if args.iter().any(|a| a == flag) {
-            cfg.theme = theme.into();
-            let _ = cfg.save();
-        }
-    }
 
     let result = match command {
         _ if args.iter().any(|a| a == "-h" || a == "--help") => {
@@ -56,7 +75,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         _ if args.iter().any(|a| a == "-V" || a == "--version") => {
-            println!("seshka {}", env!("CARGO_PKG_VERSION"));
+            println!("hana {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         None => tui::run(&mut cfg, args.iter().any(|a| a == "--storage")),
@@ -66,20 +85,24 @@ fn main() -> ExitCode {
         Some("disk") => disk_report(json),
         Some("delete-session") => delete_sessions(&operands, yes),
         Some("remove-worktree") => remove_worktree(&operands, force, yes),
+        Some("themes") => {
+            show_themes(&cfg);
+            Ok(())
+        }
         Some("config") => {
             println!("{}", Config::path().display());
             println!("{}", serde_json::to_string_pretty(&cfg).unwrap_or_default());
             Ok(())
         }
         Some(other) => {
-            eprintln!("seshka: unknown command '{other}'\n\n{HELP}");
+            eprintln!("hana: unknown command '{other}'\n\n{HELP}");
             return ExitCode::from(2);
         }
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("seshka: {e}");
+            eprintln!("hana: {e}");
             ExitCode::FAILURE
         }
     }
@@ -381,4 +404,29 @@ fn remove_worktree(which: &[&str], force: bool, yes: bool) -> io::Result<()> {
         println!("Removed. Freed {}.", format_bytes(outcome.freed));
     }
     Ok(())
+}
+
+/// Every theme as a row of color swatches, in true color.
+fn show_themes(cfg: &Config) {
+    use ratatui::style::Color;
+    fn swatch(color: Color) -> String {
+        match color {
+            Color::Rgb(r, g, b) => format!("\x1b[48;2;{r};{g};{b}m   \x1b[0m"),
+            _ => "   ".into(),
+        }
+    }
+    fn fg(color: Color, text: &str) -> String {
+        match color {
+            Color::Rgb(r, g, b) => format!("\x1b[38;2;{r};{g};{b}m{text}\x1b[0m"),
+            _ => text.into(),
+        }
+    }
+    let current = themes::by_name(&cfg.theme).name;
+    println!();
+    for t in themes::THEMES {
+        let mark = if t.name == current { fg(t.accent, "▸") } else { " ".into() };
+        let colors: String = [t.bg.unwrap_or(Color::Reset), t.accent, t.info, t.good, t.warn, t.text, t.dim].into_iter().map(swatch).collect();
+        println!(" {mark} {} {colors}  {}", fg(t.accent, &format!("{:<16}", t.name)), fg(t.dim, t.blurb));
+    }
+    println!("\n   Pick one with  hana --theme <name>,  or press t / T in the interactive view.\n");
 }

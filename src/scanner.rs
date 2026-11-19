@@ -341,7 +341,7 @@ pub fn scan(snap: &Snapshot) -> Vec<Proc> {
             if !seen.insert(up) {
                 break;
             }
-            // Past seshka or another Claude Code process it is no longer this session's doing.
+            // Past hana or another Claude Code process it is no longer this session's doing.
             if up == me || snap.is_claude(up) {
                 break;
             }
@@ -552,7 +552,7 @@ fn read_tail(path: &std::path::Path) -> (Option<String>, Option<String>) {
 pub enum Status {
     Busy,
     Idle,
-    /// A status this version of seshka does not know.
+    /// A status this version of hana does not know.
     Other(String),
     /// Claude Code left no record for this process.
     Unknown,

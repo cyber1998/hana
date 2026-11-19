@@ -499,7 +499,7 @@ mod tests {
     /// A worktree made in a scratch repository: found, measured, refused while dirty, removed once clean.
     #[test]
     fn worktree_lifecycle() {
-        let base = std::env::temp_dir().join(format!("seshka-wt-test-{}", win::current_pid()));
+        let base = std::env::temp_dir().join(format!("hana-wt-test-{}", win::current_pid()));
         let _ = force_remove_dir(&base);
         let repo = base.join("repo");
         fs::create_dir_all(&repo).unwrap();

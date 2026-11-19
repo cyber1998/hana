@@ -1,12 +1,12 @@
 [package]
-name = "seshka"
+name = "hana"
 version = "0.1.0"
 edition = "2021"
-description = "Kill what Claude Code left behind. A Windows terminal port of jigjoy-ai/seshka."
+description = "Clean up after Claude Code on Windows: leftover processes, session data and worktrees. Based on jigjoy-ai/seshka."
 license = "MIT"
 
 [[bin]]
-name = "seshka"
+name = "hana"
 path = "src/main.rs"
 
 [dependencies]

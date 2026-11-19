@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="240" viewBox="0 0 880 240" role="img" aria-label="hana: cleans up after Claude Code on Windows">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A1A2B"/>
+      <stop offset="1" stop-color="#140D16"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#F4A7C0" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#F4A7C0" stop-opacity="0"/>
+    </radialGradient>
+    <g id="petal">
+      <path d="M0 0 C -15 -18, -13 -42, 0 -50 C 13 -42, 15 -18, 0 0 Z"/>
+    </g>
+  </defs>
+
+  <rect width="880" height="240" rx="20" fill="url(#sky)"/>
+
+  <!-- falling petals -->
+  <g fill="#F4A7C0" opacity="0.55">
+    <use href="#petal" transform="translate(640 46) rotate(35) scale(0.42)"/>
+    <use href="#petal" transform="translate(720 92) rotate(-20) scale(0.32)"/>
+    <use href="#petal" transform="translate(800 40) rotate(70) scale(0.38)"/>
+    <use href="#petal" transform="translate(770 176) rotate(140) scale(0.46)"/>
+    <use href="#petal" transform="translate(600 196) rotate(-60) scale(0.3)"/>
+    <use href="#petal" transform="translate(842 128) rotate(15) scale(0.28)"/>
+  </g>
+
+  <!-- the flower -->
+  <circle cx="150" cy="120" r="96" fill="url(#glow)"/>
+  <g transform="translate(150 120)">
+    <g fill="#F4A7C0">
+      <use href="#petal" transform="rotate(0)"/>
+      <use href="#petal" transform="rotate(72)"/>
+      <use href="#petal" transform="rotate(144)"/>
+      <use href="#petal" transform="rotate(216)"/>
+      <use href="#petal" transform="rotate(288)"/>
+    </g>
+    <g fill="#FBE4EC" opacity="0.55">
+      <use href="#petal" transform="rotate(36) scale(0.55)"/>
+      <use href="#petal" transform="rotate(108) scale(0.55)"/>
+      <use href="#petal" transform="rotate(180) scale(0.55)"/>
+      <use href="#petal" transform="rotate(252) scale(0.55)"/>
+      <use href="#petal" transform="rotate(324) scale(0.55)"/>
+    </g>
+    <circle r="10" fill="#FFD6A5"/>
+    <circle r="4" fill="#F74C00"/>
+  </g>
+
+  <text x="270" y="122" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="78" font-weight="700" fill="#FBE4EC" letter-spacing="2">hana</text>
+  <text x="274" y="160" font-family="Segoe UI, system-ui, -apple-system, sans-serif" font-size="20" fill="#E8B4D8">cleans up after Claude Code on Windows</text>
+  <text x="274" y="192" font-family="Cascadia Code, Consolas, ui-monospace, monospace" font-size="14" fill="#A67F8E">leftover processes · session data · worktrees · 11 themes</text>
+</svg>

@@ -26,7 +26,7 @@ pub struct Config {
     pub idle_limit_minutes: u64,
     /// While on, sessions idle past the limit are ended without asking, on every scan.
     pub ends_idle_sessions: bool,
-    /// Look of the interactive view: "classic" or "kawaii".
+    /// Look of the interactive view; one of the names in `tui::THEMES`.
     pub theme: String,
 }
 
@@ -37,21 +37,30 @@ impl Default for Config {
             refresh_interval: 30,
             idle_limit_minutes: 120,
             ends_idle_sessions: false,
-            theme: "classic".into(),
+            theme: "original".into(),
         }
     }
 }
 
 impl Config {
-    pub fn path() -> PathBuf {
+    fn dir(name: &str) -> PathBuf {
         let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-        base.join("seshka").join("config.json")
+        base.join(name).join("config.json")
+    }
+
+    pub fn path() -> PathBuf {
+        Self::dir("hana")
     }
 
     pub fn load() -> Config {
-        let mut cfg: Config = fs::read_to_string(Self::path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        let read = |path: PathBuf| fs::read_to_string(path).ok().and_then(|t| serde_json::from_str::<Config>(&t).ok());
+        // Settings from before the rename carry over.
+        let mut cfg = read(Self::path()).or_else(|| read(Self::dir("seshka"))).unwrap_or_default();
         cfg.idle_limit_minutes = cfg.idle_limit_minutes.max(MINIMUM_IDLE_LIMIT);
         cfg.refresh_interval = cfg.refresh_interval.clamp(5, 3600);
+        if cfg.theme.eq_ignore_ascii_case("classic") {
+            cfg.theme = "original".into();
+        }
         cfg
     }
 

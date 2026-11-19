@@ -12,127 +12,14 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use unicode_width::UnicodeWidthChar;
 
 use crate::disk::{self, Outcome, SessionData, StorageResult, Worktree};
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot, Status};
+use crate::themes::{self, Theme};
 use crate::store::{self, format_bytes, format_limit, human_age, plural, Config, KillReport, ScanResult, Target, MINIMUM_IDLE_LIMIT};
-
-// MARK: themes
-
-struct Theme {
-    accent: Color,
-    dim: Color,
-    text: Color,
-    good: Color,
-    warn: Color,
-    info: Color,
-    select_bg: Color,
-    border: BorderType,
-    logo_dirty: &'static str,
-    logo_clean: &'static str,
-    logo_loading: &'static str,
-    tagline: &'static str,
-    section_left: &'static str,
-    section_right: &'static str,
-    lowercase_sections: bool,
-    clean: &'static str,
-    no_sessions: &'static str,
-    no_data: &'static str,
-    busy_dot: &'static str,
-    idle_dot: &'static str,
-    unknown_dot: &'static str,
-    killing: &'static str,
-    ending: &'static str,
-    measuring: &'static str,
-    deleting: &'static str,
-    freed: &'static str,
-    freed_suffix: &'static str,
-    marked: &'static str,
-    unmarked: &'static str,
-    confirm_title: &'static str,
-    settings_title: &'static str,
-    help_title: &'static str,
-    key_sep: &'static str,
-}
-
-const CLASSIC: Theme = Theme {
-    accent: Color::Rgb(232, 98, 80),
-    dim: Color::DarkGray,
-    text: Color::Gray,
-    good: Color::Green,
-    warn: Color::Yellow,
-    info: Color::Cyan,
-    select_bg: Color::Rgb(50, 50, 60),
-    border: BorderType::Plain,
-    logo_dirty: " ◐ seshka",
-    logo_clean: " ● seshka",
-    logo_loading: " ○ seshka",
-    tagline: "  kill what Claude Code left behind",
-    section_left: " ",
-    section_right: "",
-    lowercase_sections: false,
-    clean: "  Nothing left behind. All clean.",
-    no_sessions: "  No Claude Code session is open.",
-    no_data: "  No session data on disk.",
-    busy_dot: " ●",
-    idle_dot: " ●",
-    unknown_dot: " ○",
-    killing: "killing…",
-    ending: "ending…",
-    measuring: "measuring…",
-    deleting: "deleting…",
-    freed: " Freed ",
-    freed_suffix: "",
-    marked: "■ ",
-    unmarked: "□ ",
-    confirm_title: " Confirm ",
-    settings_title: " Settings ",
-    help_title: " seshka · any key to close ",
-    key_sep: "  ",
-};
-
-const KAWAII: Theme = Theme {
-    accent: Color::Rgb(255, 121, 198),
-    dim: Color::Rgb(150, 138, 180),
-    text: Color::Rgb(240, 228, 255),
-    good: Color::Rgb(120, 232, 192),
-    warn: Color::Rgb(255, 200, 140),
-    info: Color::Rgb(150, 205, 255),
-    select_bg: Color::Rgb(72, 44, 84),
-    border: BorderType::Rounded,
-    logo_dirty: " (｡•︿•｡) seshka",
-    logo_clean: " (≧◡≦) seshka",
-    logo_loading: " (・_・ヾ seshka",
-    tagline: "  ~ tidying up after claude ~ ✿",
-    section_left: " ✿ ",
-    section_right: " ✿",
-    lowercase_sections: true,
-    clean: "  ✧ nothing left behind ~ all sparkly clean! ٩(◕‿◕)۶ ✧",
-    no_sessions: "  no claude sessions open ~ (－ω－) zzZ",
-    no_data: "  no session data at all ~ so tidy! ♡",
-    busy_dot: " ★",
-    idle_dot: " ☾",
-    unknown_dot: " ♡",
-    killing: "bonk! ☆",
-    ending: "sayonara…",
-    measuring: "counting… ⊂(・▽・⊂)",
-    deleting: "poof! ✧",
-    freed: " ✧ yay! freed ",
-    freed_suffix: "  (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
-    marked: "♥ ",
-    unmarked: "♡ ",
-    confirm_title: " are you sure? (・・;) ",
-    settings_title: " settings ♡ ",
-    help_title: " seshka help ✿ any key to close ",
-    key_sep: " ♡ ",
-};
-
-fn is_kawaii(cfg: &Config) -> bool {
-    cfg.theme.eq_ignore_ascii_case("kawaii")
-}
 
 // MARK: state
 
@@ -256,11 +143,7 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
 
 impl App {
     fn theme(&self) -> &'static Theme {
-        if is_kawaii(&self.cfg) {
-            &KAWAII
-        } else {
-            &CLASSIC
-        }
+        themes::by_name(&self.cfg.theme)
     }
 
     fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -374,7 +257,7 @@ impl App {
                 }
                 if !report.gone.is_empty() {
                     let what = plural(report.all_gone.len(), "process");
-                    self.announce_freed(report.freed, format!("{what} {}", if is_kawaii(&self.cfg) { "bonked" } else { "killed" }));
+                    self.announce_freed(report.freed, format!("{what} {}", self.theme().killed_verb));
                 }
                 if !report.survivors.is_empty() {
                     self.say(format!(
@@ -776,6 +659,9 @@ impl App {
 
     fn draw(&mut self, f: &mut Frame) {
         let t = self.theme();
+        if t.bg.is_some() {
+            f.render_widget(Block::new().style(t.base()), f.area());
+        }
         let details_height = if self.view == View::Storage { 7 } else { 5 };
         let [header, body, details, footer] =
             Layout::vertical([Constraint::Length(2), Constraint::Min(4), Constraint::Length(details_height), Constraint::Length(1)]).areas(f.area());
@@ -820,7 +706,7 @@ impl App {
         };
         let tab = |label: &str, view: View| {
             if self.view == view {
-                Span::styled(format!(" {label} "), Style::new().fg(Color::Black).bg(t.accent).bold())
+                Span::styled(format!(" {label} "), Style::new().fg(t.on_accent).bg(t.accent).bold())
             } else {
                 Span::styled(format!(" {label} "), Style::new().fg(t.dim))
             }
@@ -1042,17 +928,17 @@ impl App {
         text.lines.push(Line::default());
         let mut buttons = vec![
             Span::raw(" "),
-            Span::styled(" y ", Style::new().fg(Color::Black).bg(t.accent).bold()),
+            Span::styled(" y ", Style::new().fg(t.on_accent).bg(t.accent).bold()),
             Span::styled(" yes   ", Style::new().fg(t.text)),
         ];
         if risky {
-            buttons.push(Span::styled(" F ", Style::new().fg(Color::Black).bg(t.warn).bold()));
+            buttons.push(Span::styled(" F ", Style::new().fg(t.on_accent).bg(t.warn).bold()));
             buttons.push(Span::styled(" yes, and force the risky ones   ", Style::new().fg(t.text)));
         }
-        buttons.push(Span::styled(" n ", Style::new().fg(Color::Black).bg(t.dim)));
+        buttons.push(Span::styled(" n ", Style::new().fg(t.on_accent).bg(t.dim)));
         buttons.push(Span::styled(" no", Style::new().fg(t.text)));
         text.lines.push(Line::from(buttons));
-        let block = Block::bordered().border_type(t.border).title(t.confirm_title).border_style(Style::new().fg(t.accent));
+        let block = Block::bordered().border_type(t.border).style(t.base()).title(t.confirm_title).border_style(Style::new().fg(t.accent));
         f.render_widget(Paragraph::new(text).block(block).wrap(Wrap { trim: false }), area);
     }
 
@@ -1079,7 +965,7 @@ impl App {
                 value(if self.cfg.ends_idle_sessions { "[x] automatically".into() } else { "[ ] only when asked".into() }),
             ]),
             Line::from(vec![mark(3), name("Never kill"), protected]),
-            Line::from(vec![mark(4), name("Look"), value(if is_kawaii(&self.cfg) { "◂ kawaii ♡ ▸".into() } else { "◂ classic ▸".into() })]),
+            Line::from(vec![mark(4), name("Look"), value(format!("◂ {} ▸", t.name))]),
             Line::default(),
             hint("   Commands containing a protected pattern are skipped by kill session,".into()),
             hint("   kill all and end idle. Patterns are comma-separated.".into()),
@@ -1089,7 +975,7 @@ impl App {
             ),
             hint(format!("   {}", Config::path().display())),
         ];
-        let block = Block::bordered().border_type(t.border).title(t.settings_title).border_style(Style::new().fg(t.accent));
+        let block = Block::bordered().border_type(t.border).style(t.base()).title(t.settings_title).border_style(Style::new().fg(t.accent));
         f.render_widget(Paragraph::new(lines).block(block), area);
     }
 
@@ -1104,7 +990,8 @@ impl App {
         let dim = |s: &str| Line::from(Span::styled(format!("  {s}"), Style::new().fg(t.dim)));
         let lines = vec![
             head("everywhere"),
-            key("↑ ↓  j k", "move · tab / 1 / 2 switch tabs · t switch look · s settings · q quit"),
+            key("↑ ↓  j k", "move · tab / 1 / 2 switch tabs · s settings · q quit"),
+            key("t / T", "next / previous theme (11 of them; also in settings)"),
             Line::default(),
             head("processes"),
             key("x  Del", "kill the selected process, or everything in the selected session"),
@@ -1126,11 +1013,11 @@ impl App {
             dim("only removed if you press F; one a process is working in, never."),
             Line::default(),
             dim("How it works: Claude Code marks everything it starts (CLAUDECODE=1, session ID,"),
-            dim("its PID). seshka reads those; a process is left behind once its Claude Code is"),
+            dim("its PID). hana reads those; a process is left behind once its Claude Code is"),
             dim("gone. Windows does not end children with their parent, so killing a row also"),
             dim("ends what it started. Nothing leaves your machine."),
         ];
-        let block = Block::bordered().border_type(t.border).title(t.help_title).border_style(Style::new().fg(t.accent));
+        let block = Block::bordered().border_type(t.border).style(t.base()).title(t.help_title).border_style(Style::new().fg(t.accent));
         f.render_widget(Paragraph::new(lines).block(block), area);
     }
 
@@ -1212,7 +1099,8 @@ impl App {
             }
             KeyCode::Char('?') | KeyCode::Char('h') => self.mode = Mode::Help,
             KeyCode::Char('s') => self.mode = Mode::Settings { field: 0, editing: None },
-            KeyCode::Char('t') => self.toggle_theme(),
+            KeyCode::Char('t') => self.cycle_theme(true),
+            KeyCode::Char('T') => self.cycle_theme(false),
             KeyCode::Char('x') | KeyCode::Delete if self.view == View::Storage => self.ask_delete(),
             KeyCode::Char('x') | KeyCode::Delete => self.kill_selected(),
             KeyCode::Char(' ') if self.view == View::Storage => self.toggle_mark(),
@@ -1227,12 +1115,11 @@ impl App {
         }
     }
 
-    fn toggle_theme(&mut self) {
-        self.cfg.theme = if is_kawaii(&self.cfg) { "classic".into() } else { "kawaii".into() };
+    fn cycle_theme(&mut self, forward: bool) {
+        let next = themes::cycle(&self.cfg.theme, forward);
+        self.cfg.theme = next.name.into();
         self.save();
-        if is_kawaii(&self.cfg) {
-            self.say("kawaii mode on! ✧*｡٩(ˊᗜˋ*)و✧*｡");
-        }
+        self.say(format!("{}  ·  {}  (t / T to keep browsing)", next.hello, next.blurb));
     }
 
     fn kill_selected(&mut self) {
@@ -1429,7 +1316,7 @@ impl App {
             }
         };
         match copy_to_clipboard(&text) {
-            Ok(()) => self.say(if is_kawaii(&self.cfg) { "copied! (๑˃ᴗ˂)ﻭ" } else { "Copied" }),
+            Ok(()) => self.say(self.theme().copied),
             Err(e) => self.say(format!("Could not copy: {e}")),
         }
     }
@@ -1485,7 +1372,7 @@ impl App {
                 app.cfg.idle_limit_minutes = next.clamp(MINIMUM_IDLE_LIMIT, 7 * 24 * 60);
             }
             2 => app.cfg.ends_idle_sessions = !app.cfg.ends_idle_sessions,
-            4 => app.cfg.theme = if is_kawaii(&app.cfg) { "classic".into() } else { "kawaii".into() },
+            4 => app.cfg.theme = themes::cycle(&app.cfg.theme, up).name.into(),
             _ => {}
         };
         match key.code {

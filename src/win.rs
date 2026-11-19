@@ -1,6 +1,6 @@
-//! The Win32 calls seshka needs, wrapped so the rest of the program stays safe code.
+//! The Win32 calls hana needs, wrapped so the rest of the program stays safe code.
 //!
-//! On macOS seshka reads everything through `ps` and `lsof`. Windows has no equivalent that shows
+//! On macOS the original seshka reads everything through `ps` and `lsof`. Windows has no equivalent that shows
 //! another process's environment, so it is read straight out of the process's PEB here.
 
 use std::collections::HashMap;
@@ -102,7 +102,7 @@ pub fn list_processes() -> Vec<Entry> {
     out
 }
 
-/// What seshka can learn about one process. Fields stay empty when Windows does not allow reading them
+/// What hana can learn about one process. Fields stay empty when Windows does not allow reading them
 /// (another user's processes, elevated ones, protected ones).
 #[derive(Default)]
 pub struct Inspected {
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn recycles_a_file() {
-        let dir = std::env::temp_dir().join(format!("seshka-recycle-test-{}", current_pid()));
+        let dir = std::env::temp_dir().join(format!("hana-recycle-test-{}", current_pid()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.txt"), b"x").unwrap();
         recycle(&[dir.clone()]).unwrap();
@@ -433,13 +433,13 @@ mod tests {
 
     #[test]
     fn reads_own_environment() {
-        std::env::set_var("SESHKA_TEST_MARKER", "yes");
+        std::env::set_var("HANA_TEST_MARKER", "yes");
         // The PEB copy is what child processes see; our own is updated by set_var too.
         let me = inspect(current_pid(), true);
         let env = me.env.expect("own environment is readable");
-        assert_eq!(env.get("SESHKA_TEST_MARKER").map(String::as_str), Some("yes"));
+        assert_eq!(env.get("HANA_TEST_MARKER").map(String::as_str), Some("yes"));
         assert!(me.created > 0);
-        assert!(me.cmdline.to_lowercase().contains("seshka"));
+        assert!(me.cmdline.to_lowercase().contains("hana"));
     }
 
     #[test]
