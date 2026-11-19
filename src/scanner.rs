@@ -437,6 +437,29 @@ pub const UNKNOWN_PROJECT: &str = "unknown project";
 pub struct SessionMeta {
     pub project: String,
     pub title: Option<String>,
+    /// The folder the session worked in, from its transcript.
+    pub cwd: Option<String>,
+}
+
+/// Marks the folders Claude Code creates worktrees in: <repo>\.claude\worktrees\<name>.
+pub const WORKTREES_MARKER: &str = "\\.claude\\worktrees\\";
+
+/// Splits a path inside a Claude Code worktree into (repo root, worktree root).
+pub fn worktree_of(path: &str) -> Option<(String, String)> {
+    let normal = path.replace('/', "\\");
+    let at = normal.to_lowercase().find(WORKTREES_MARKER)?;
+    let repo = normal[..at].to_string();
+    let rest = &normal[at + WORKTREES_MARKER.len()..];
+    let name = rest.split('\\').next().filter(|n| !n.is_empty())?;
+    Some((repo.clone(), format!("{repo}{WORKTREES_MARKER}{name}")))
+}
+
+/// "hana" for D:\My Code\hana, "demo ⑂ feature-1a2b3c" for a worktree of demo.
+pub fn project_name(cwd: &str) -> String {
+    if let Some((repo, root)) = worktree_of(cwd) {
+        return format!("{} ⑂ {}", file_name(&repo), file_name(&root));
+    }
+    file_name(cwd.trim_end_matches(['\\', '/'])).to_string()
 }
 
 /// Project name and title of a session, read from Claude Code's own transcript files.
@@ -455,7 +478,7 @@ pub fn session_meta(sid: &str) -> SessionMeta {
 }
 
 fn read_meta(sid: &str) -> SessionMeta {
-    let unknown = SessionMeta { project: UNKNOWN_PROJECT.into(), title: None };
+    let unknown = SessionMeta { project: UNKNOWN_PROJECT.into(), title: None, cwd: None };
     if sid.is_empty() || sid.contains(['\\', '/', '.']) {
         return unknown;
     }
@@ -467,8 +490,15 @@ fn read_meta(sid: &str) -> SessionMeta {
             continue;
         }
         let (title, cwd) = read_tail(&file);
-        let project = match cwd {
-            Some(cwd) if !cwd.is_empty() => file_name(cwd.trim_end_matches(['\\', '/'])).to_string(),
+        // A title the user set with /rename is also kept next to the transcript.
+        let custom = fs::read_to_string(dir.path().join(sid).join("custom-title.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|j| j.get("customTitle").and_then(Value::as_str).map(str::to_string))
+            .filter(|t| !t.is_empty());
+        let title = custom.or(title);
+        let project = match &cwd {
+            Some(cwd) if !cwd.is_empty() => project_name(cwd),
             // Claude Code names each project folder after its path, with every non-alphanumeric character
             // replaced by "-": D:\My Code\hana becomes D--My-Code-hana.
             _ => {
@@ -476,7 +506,7 @@ fn read_meta(sid: &str) -> SessionMeta {
                 name.rsplit('-').find(|s| !s.is_empty()).unwrap_or(&name).to_string()
             }
         };
-        return SessionMeta { project: if project.is_empty() { "~".into() } else { project }, title };
+        return SessionMeta { project: if project.is_empty() { "~".into() } else { project }, title, cwd };
     }
     unknown
 }
@@ -581,7 +611,7 @@ pub fn sessions(snap: &Snapshot, procs: &[Proc], min_age: u64) -> Vec<RunningSes
             let meta = session_id.as_deref().map(session_meta);
             let project = match &meta {
                 Some(m) if m.project != UNKNOWN_PROJECT => m.project.clone(),
-                _ if !cwd.is_empty() => file_name(cwd.trim_end_matches(['\\', '/'])).to_string(),
+                _ if !cwd.is_empty() => project_name(&cwd),
                 _ => "Claude Code".to_string(),
             };
             let title = field("name").filter(|s| !s.is_empty()).or_else(|| meta.and_then(|m| m.title));

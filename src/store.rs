@@ -26,11 +26,19 @@ pub struct Config {
     pub idle_limit_minutes: u64,
     /// While on, sessions idle past the limit are ended without asking, on every scan.
     pub ends_idle_sessions: bool,
+    /// Look of the interactive view: "classic" or "kawaii".
+    pub theme: String,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { protected_patterns: vec!["wsl.exe".into()], refresh_interval: 30, idle_limit_minutes: 120, ends_idle_sessions: false }
+        Config {
+            protected_patterns: vec!["wsl.exe".into()],
+            refresh_interval: 30,
+            idle_limit_minutes: 120,
+            ends_idle_sessions: false,
+            theme: "classic".into(),
+        }
     }
 }
 

@@ -382,9 +382,54 @@ pub fn terminate(pid: u32, created: u64) -> bool {
     unsafe { TerminateProcess(handle.0, 1) != 0 }
 }
 
+/// Moves files and folders to the Recycle Bin, so a deletion can be undone from there.
+/// Windows asks first if something is too big for the bin and would have to be deleted for good.
+pub fn recycle(paths: &[std::path::PathBuf]) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{
+        SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, FO_DELETE, SHFILEOPSTRUCTW,
+    };
+    if paths.is_empty() {
+        return Ok(());
+    }
+    // A list of NUL-terminated paths, ended by one more NUL.
+    let mut from: Vec<u16> = Vec::new();
+    for path in paths {
+        if !path.is_absolute() {
+            return Err(format!("not an absolute path: {}", path.display()));
+        }
+        from.extend(path.as_os_str().encode_wide());
+        from.push(0);
+    }
+    from.push(0);
+    unsafe {
+        let mut op: SHFILEOPSTRUCTW = zeroed();
+        op.wFunc = FO_DELETE as _;
+        op.pFrom = from.as_ptr();
+        op.fFlags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT | FOF_WANTNUKEWARNING) as _;
+        let rc = SHFileOperationW(&mut op);
+        if rc != 0 {
+            return Err(format!("the Recycle Bin refused it (error {rc:#x})"));
+        }
+        if op.fAnyOperationsAborted != 0 {
+            return Err("cancelled".into());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recycles_a_file() {
+        let dir = std::env::temp_dir().join(format!("seshka-recycle-test-{}", current_pid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"x").unwrap();
+        recycle(&[dir.clone()]).unwrap();
+        assert!(!dir.exists());
+    }
 
     #[test]
     fn reads_own_environment() {

@@ -13,6 +13,8 @@ When a Claude Code session ends, the dev servers, watchers, MCP servers and brow
 - Tells you how much memory they were holding.
 - Shows every open session too: whether it's working or idle, for how long, and what it holds.
 - Ends idle sessions when you ask. If you turn the option on, it also ends them by itself once they've waited past your limit. The limit is two hours unless you change it, and the option is off by default.
+- **Storage** (Windows port only): shows how much each session's data and each git worktree weighs, and deletes what you pick.
+- **Two looks:** classic, and kawaii ✿ (pastel colors, kaomoji, rounded borders). Press `t` to switch.
 
 ## Build
 
@@ -28,30 +30,61 @@ The result is one `seshka.exe` with no dependencies. Put it anywhere on your `PA
 ## Use
 
 ```
-seshka                 Open the interactive view
+seshka [--storage]     Open the interactive view (on the storage tab)
 seshka list [--json]   Print leftovers and open sessions, then exit
 seshka kill-all [-y]   Kill every leftover process (except protected ones)
 seshka kill-idle [-y]  End sessions idle longer than the limit
 seshka config          Print where settings are kept, and what they are
+
+seshka disk [--json]                               How much each worktree and session's data weighs
+seshka delete-session <id>... [-y]                 Move sessions' data to the Recycle Bin (ID or prefix)
+seshka remove-worktree <path|name> [--force] [-y]  git worktree remove; --force also drops uncommitted work
+
+seshka --kawaii | --classic                        Switch the look (remembered)
 ```
 
-Keys in the interactive view:
+The interactive view has two tabs. Switch with `Tab`, `1` or `2`.
 
-| Key | Action |
+| Key | Everywhere |
 | --- | --- |
 | `↑ ↓` / `j k` | move |
+| `c` / `o` | copy the command, ID or path / open the folder in Explorer |
+| `t` | switch between classic and kawaii |
+| `s` / `?` / `q` | settings / help / quit |
+
+| Key | Processes tab |
+| --- | --- |
 | `x` / `Del` | kill the selected process, or everything in the selected session. On an open session it ends the session (asks first) |
 | `X` | kill everything left behind (asks first) |
 | `i` | end sessions idle longer than the limit (asks first) |
 | `p` | protect or unprotect the selected program |
-| `c` | copy the command, or the session ID |
-| `o` | open the process's folder in Explorer |
 | `r` / `F5` | scan now |
-| `s` | settings: scan interval, idle limit, auto-end, protected patterns |
-| `?` | help |
-| `q` / `Esc` | quit |
+
+| Key | Storage tab |
+| --- | --- |
+| `space` | mark a worktree or session |
+| `M` / `u` | mark every session untouched for 30+ days / unmark all |
+| `x` / `Del` | delete what's marked, or the selected row (asks first) |
+| `r` | scan and measure again |
 
 Settings are saved in `%APPDATA%\seshka\config.json`.
+
+## Storage
+
+For each session, Claude Code keeps the following under `~/.claude`:
+
+- the transcript (`projects/<project>/<id>.jsonl`)
+- subagent transcripts and tool output (`projects/<project>/<id>/`)
+- file backups for rewinding (`file-history/<id>/`)
+- a captured environment (`session-env/<id>/`)
+- in older versions, `todos/` and `debug/` files
+
+The storage tab adds these up per session, biggest first. Worktrees are found in every repository a session worked in, through `git worktree list` plus any stray folders under `.claude\worktrees`. Each is measured and checked for uncommitted changes and for commits that no branch points to.
+
+Deleting is careful:
+
+- **Session data goes to the Recycle Bin.** A session whose transcript is gone can no longer be resumed. Open sessions are never touched, and neither is a project's `memory/` folder.
+- **Worktrees are removed with `git worktree remove`.** The folder is deleted for good and its branch is kept. A worktree with uncommitted changes, commits on no branch, or a lock is skipped unless you press `F` (or pass `--force`). A worktree that a process is working in is never removed.
 
 ## How it works
 
