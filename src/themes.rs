@@ -24,7 +24,6 @@ pub struct Theme {
     pub logo_dirty: &'static str,
     pub logo_clean: &'static str,
     pub logo_loading: &'static str,
-    pub tagline: &'static str,
     pub section_left: &'static str,
     pub section_right: &'static str,
     pub lowercase_sections: bool,
@@ -45,7 +44,6 @@ pub struct Theme {
     pub unmarked: &'static str,
     pub copied: &'static str,
     /// Said when the theme is picked.
-    pub hello: &'static str,
     pub confirm_title: &'static str,
     pub settings_title: &'static str,
     pub help_title: &'static str,
@@ -84,7 +82,6 @@ pub const ORIGINAL: Theme = Theme {
     logo_dirty: " ◐ hana",
     logo_clean: " ● hana",
     logo_loading: " ○ hana",
-    tagline: "  cleans up after Claude Code",
     section_left: " ",
     section_right: "",
     lowercase_sections: false,
@@ -104,7 +101,6 @@ pub const ORIGINAL: Theme = Theme {
     marked: "■ ",
     unmarked: "□ ",
     copied: "Copied",
-    hello: "Theme: original",
     confirm_title: " Confirm ",
     settings_title: " Settings ",
     help_title: " hana · any key to close ",
@@ -127,7 +123,6 @@ pub const KAWAII: Theme = Theme {
     logo_dirty: " (｡•︿•｡) hana",
     logo_clean: " (≧◡≦) hana",
     logo_loading: " (・_・ヾ hana",
-    tagline: "  ~ tidying up after claude ~ ✿",
     section_left: " ✿ ",
     section_right: " ✿",
     lowercase_sections: true,
@@ -147,7 +142,6 @@ pub const KAWAII: Theme = Theme {
     marked: "♥ ",
     unmarked: "♡ ",
     copied: "copied! (๑˃ᴗ˂)ﻭ",
-    hello: "kawaii mode on! ✧*｡٩(ˊᗜˋ*)و✧*｡",
     confirm_title: " are you sure? (・・;) ",
     settings_title: " settings ♡ ",
     help_title: " hana help ✿ any key to close ",
@@ -170,7 +164,6 @@ pub const CYBERPUNK: Theme = Theme {
     logo_dirty: " ▚▞ HANA//",
     logo_clean: " ▚▞ HANA//",
     logo_loading: " ▚▞ HANA//",
-    tagline: "  // netrunner cleanup daemon v0.1",
     section_left: " ▌",
     section_right: " //",
     clean: "  // GRID CLEAN. NO ROGUE PROCESSES.",
@@ -188,7 +181,6 @@ pub const CYBERPUNK: Theme = Theme {
     marked: "◆ ",
     unmarked: "◇ ",
     copied: "// COPIED TO BUFFER",
-    hello: "// THEME LOADED: CYBERPUNK",
     confirm_title: " // CONFIRM EXECUTION ",
     settings_title: " // SYS.CONFIG ",
     help_title: " // HANA.MANUAL · ANY KEY ",
@@ -212,7 +204,6 @@ pub const NEON: Theme = Theme {
     logo_dirty: " ✦ hana ✦",
     logo_clean: " ✦ hana ✦",
     logo_loading: " ✧ hana ✧",
-    tagline: "  open all night",
     section_left: " ≫ ",
     clean: "  ✦ all clear ✦",
     killing: "zap!",
@@ -220,7 +211,6 @@ pub const NEON: Theme = Theme {
     freed: " ✦ freed ",
     marked: "◉ ",
     unmarked: "○ ",
-    hello: "✦ neon on ✦",
     key_sep: " • ",
     ..ORIGINAL
 };
@@ -242,7 +232,6 @@ pub const TOKYO_NIGHT: Theme = Theme {
     logo_dirty: " 夜 hana",
     logo_clean: " 夜 hana",
     logo_loading: " 夜 hana",
-    tagline: "  quiet cleanup after dark",
     section_left: " ◆ ",
     lowercase_sections: true,
     clean: "  nothing left behind. the city sleeps.",
@@ -250,7 +239,6 @@ pub const TOKYO_NIGHT: Theme = Theme {
     freed: " freed ",
     marked: "◆ ",
     unmarked: "◇ ",
-    hello: "tokyo-night",
     ..ORIGINAL
 };
 
@@ -270,13 +258,11 @@ pub const GITHUB: Theme = Theme {
     border: BorderType::Rounded,
     logo_dirty: " ◉ hana",
     logo_clean: " ✓ hana",
-    tagline: "  ⑂ main",
     clean: "  ✓ Nothing left behind. Working tree clean.",
     killed_verb: "closed",
     freed: " ✓ Freed ",
     marked: "☑ ",
     unmarked: "☐ ",
-    hello: "Theme: github",
     ..ORIGINAL
 };
 
@@ -296,7 +282,6 @@ pub const MATRIX: Theme = Theme {
     logo_dirty: " ⣿ hana",
     logo_clean: " ⣿ hana",
     logo_loading: " ⣀ hana",
-    tagline: "  there is no spoon. only processes.",
     section_left: " > ",
     lowercase_sections: true,
     clean: "  > no anomalies in the system",
@@ -308,7 +293,6 @@ pub const MATRIX: Theme = Theme {
     marked: "[x] ",
     unmarked: "[ ] ",
     copied: "> copied",
-    hello: "> wake up…",
     key_sep: "  ",
     ..ORIGINAL
 };
@@ -329,7 +313,6 @@ pub const DEEP_OCEAN: Theme = Theme {
     logo_dirty: " ≋ hana",
     logo_clean: " ≋ hana",
     logo_loading: " ∿ hana",
-    tagline: "  ~ the tide takes what's left behind",
     section_left: " ≋ ",
     lowercase_sections: true,
     clean: "  calm waters. nothing left behind.",
@@ -339,7 +322,6 @@ pub const DEEP_OCEAN: Theme = Theme {
     freed: " ≋ washed away ",
     marked: "● ",
     unmarked: "○ ",
-    hello: "≋ deep-ocean",
     ..ORIGINAL
 };
 
@@ -358,7 +340,6 @@ pub const AUTUMN_FOREST: Theme = Theme {
     border: BorderType::Rounded,
     logo_dirty: " ❦ hana",
     logo_clean: " ❦ hana",
-    tagline: "  ~ raking up fallen processes",
     section_left: " ❦ ",
     lowercase_sections: true,
     clean: "  the path is swept. nothing left behind.",
@@ -367,7 +348,6 @@ pub const AUTUMN_FOREST: Theme = Theme {
     freed: " ❦ raked up ",
     marked: "❧ ",
     unmarked: "· ",
-    hello: "❦ autumn-forest",
     ..ORIGINAL
 };
 
@@ -388,7 +368,6 @@ pub const CHERRY_BLOSSOM: Theme = Theme {
     logo_dirty: " ❀ hana",
     logo_clean: " ❀ hana",
     logo_loading: " ✿ hana",
-    tagline: "  ~ petals fall, and so do processes",
     section_left: " ❀ ",
     lowercase_sections: true,
     clean: "  ❀ nothing left behind. only petals.",
@@ -398,7 +377,6 @@ pub const CHERRY_BLOSSOM: Theme = Theme {
     freed: " ❀ freed ",
     marked: "✿ ",
     unmarked: "❀ ",
-    hello: "❀ cherry-blossom",
     key_sep: " · ",
     ..ORIGINAL
 };
@@ -419,7 +397,6 @@ pub const WHITE_ORCHARD: Theme = Theme {
     border: BorderType::Rounded,
     logo_dirty: " ✾ hana",
     logo_clean: " ✾ hana",
-    tagline: "  ~ a tidy orchard",
     section_left: " ✾ ",
     lowercase_sections: true,
     clean: "  the orchard is tidy. nothing left behind.",
@@ -427,7 +404,6 @@ pub const WHITE_ORCHARD: Theme = Theme {
     freed: " ✾ freed ",
     marked: "● ",
     unmarked: "○ ",
-    hello: "✾ white-orchard",
     ..ORIGINAL
 };
 

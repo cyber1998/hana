@@ -418,6 +418,16 @@ pub fn recycle(paths: &[std::path::PathBuf]) -> Result<(), String> {
     Ok(())
 }
 
+/// SHA-256 of `data`, computed by Windows (CNG).
+pub fn sha256(data: &[u8]) -> Option<[u8; 32]> {
+    use windows_sys::Win32::Security::Cryptography::{BCryptHash, BCRYPT_SHA256_ALG_HANDLE};
+    let mut out = [0u8; 32];
+    let len = u32::try_from(data.len()).ok()?;
+    // SAFETY: the algorithm handle is a predefined pseudo-handle; both buffers are valid for their lengths.
+    let status = unsafe { BCryptHash(BCRYPT_SHA256_ALG_HANDLE, std::ptr::null(), 0, data.as_ptr(), len, out.as_mut_ptr(), 32) };
+    (status == 0).then_some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

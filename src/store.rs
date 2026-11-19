@@ -28,6 +28,8 @@ pub struct Config {
     pub ends_idle_sessions: bool,
     /// Look of the interactive view; one of the names in `tui::THEMES`.
     pub theme: String,
+    /// Look for a newer release on GitHub, at most once a day.
+    pub check_for_updates: bool,
 }
 
 impl Default for Config {
@@ -38,6 +40,7 @@ impl Default for Config {
             idle_limit_minutes: 120,
             ends_idle_sessions: false,
             theme: "original".into(),
+            check_for_updates: true,
         }
     }
 }

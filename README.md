@@ -51,6 +51,8 @@ hana
 
 That's all. It's a single 1.3 MB file for 64-bit Windows 10 and 11, with no installer and no runtime. If Windows SmartScreen warns about a downloaded file, choose **More info → Run anyway**: the binary isn't code-signed.
 
+**Updating:** hana checks for a new release once a day and shows `v… available · U` in the corner. Press `U`, or run `hana update`. The download is checked against the release's SHA-256 checksums before it replaces anything.
+
 <details>
 <summary>Building from source instead</summary>
 
@@ -128,6 +130,7 @@ hana disk [--json]                     how much each worktree and session's data
 hana delete-session <id>... [-y]       move sessions' data to the Recycle Bin (ID or prefix)
 hana remove-worktree <name> [--force]  git worktree remove; --force also drops uncommitted work
 
+hana update [--check]                  update to the latest release
 hana themes · hana --theme <name> · hana config · hana --help
 ```
 
@@ -140,10 +143,12 @@ hana themes · hana --theme <name> · hana config · hana --help
 | `Tab` `1` `2` | switch between processes and storage |
 | `t` / `T` | next / previous theme |
 | `c` / `o` | copy the command, ID or path / open the folder in Explorer |
-| `s` / `?` / `q` | settings / help / quit |
+| `s` / `?` / `q` | settings / all keys / quit |
+| `U` | update hana, when a new version is out |
 
 | Processes tab | |
 | --- | --- |
+| `enter` `→` `←` | show or hide a session's processes |
 | `x` `Del` | kill the selected process, or the whole session. On an open session, end it (asks first) |
 | `X` | kill everything left behind (asks first) |
 | `i` | end sessions idle past the limit (asks first) |
@@ -159,7 +164,7 @@ hana themes · hana --theme <name> · hana config · hana --help
 
 </details>
 
-Settings (scan interval, idle limit, auto-end, protected programs, theme) are in `%APPDATA%\hana\config.json`, and you can change them in the app with `s`.
+Settings (scan interval, idle limit, auto-end, protected programs, theme, update checks) are in `%APPDATA%\hana\config.json`, and you can change them in the app with `s`.
 
 ---
 
@@ -169,7 +174,7 @@ Settings (scan interval, idle limit, auto-end, protected programs, theme) are in
 - **A PID is never trusted on its own.** Windows reuses process IDs quickly, so every kill first checks the process's creation time.
 - **Session data goes to the Recycle Bin**, never deleted for good. Open sessions are skipped, and so is each project's `memory/` folder.
 - **Worktrees are removed through `git worktree remove`**, so their branches stay. A worktree with uncommitted changes or commits that no branch points to is only removed if you press `F`. One that a running process is working in is never removed.
-- **Nothing leaves your machine.**
+- **Nothing about you leaves your machine.** The only network request is the daily check for a new release on GitHub, which you can turn off in settings.
 
 <details>
 <summary><b>How it works</b></summary>

@@ -1,6 +1,6 @@
 [package]
 name = "hana"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Clean up after Claude Code on Windows: find and kill leftover processes, free ports, and reclaim disk from old sessions and git worktrees. A terminal UI based on jigjoy-ai/seshka."
 repository = "https://github.com/cyber1998/hana"
@@ -27,6 +27,7 @@ features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
     "Win32_Networking_WinSock",
+    "Win32_Security_Cryptography",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_ProcessStatus",

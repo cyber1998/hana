@@ -123,9 +123,6 @@ pub struct SessionGroup {
 }
 
 impl SessionGroup {
-    pub fn short_id(&self) -> &str {
-        &self.id[..self.id.len().min(8)]
-    }
     pub fn memory(&self) -> u64 {
         self.procs.iter().map(|p| p.memory).sum()
     }

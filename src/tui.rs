@@ -19,6 +19,7 @@ use unicode_width::UnicodeWidthChar;
 use crate::disk::{self, Outcome, SessionData, StorageResult, Worktree};
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot, Status};
 use crate::themes::{self, Theme};
+use crate::update;
 use crate::store::{self, format_bytes, format_limit, human_age, plural, Config, KillReport, ScanResult, Target, MINIMUM_IDLE_LIMIT};
 
 // MARK: state
@@ -30,6 +31,9 @@ enum Msg {
     Measured { generation: u64, path: String, measured: disk::Measured },
     MeasuringDone { generation: u64 },
     Deleted(Outcome),
+    /// A newer release, if any; `asked` when the user pressed U rather than the daily check.
+    UpdateChecked { tag: Option<String>, asked: bool },
+    Updated(Result<String, String>),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -64,6 +68,8 @@ enum Pending {
     Kill(Vec<Target>),
     /// Session data to recycle and worktrees to remove. Risky worktrees go only with force.
     Delete { sessions: Vec<SessionData>, worktrees: Vec<Worktree>, risky: usize },
+    /// Replace hana.exe with the release with this tag.
+    Update(String),
 }
 
 enum Mode {
@@ -101,6 +107,11 @@ struct App {
     deleting: bool,
     /// Storage rows picked with space, by key, to delete together.
     marked: HashSet<String>,
+    /// Rows whose processes are shown (or hidden) against their default, by key.
+    toggled: HashSet<String>,
+    /// Tag of a newer release, when one was found.
+    update: Option<String>,
+    updating: bool,
 }
 
 pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
@@ -130,8 +141,14 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
         measuring: false,
         deleting: false,
         marked: HashSet::new(),
+        toggled: HashSet::new(),
+        update: None,
+        updating: false,
     };
     app.refresh();
+    if app.cfg.check_for_updates {
+        app.check_for_update(false);
+    }
     if storage_first {
         app.switch_view(View::Storage);
     }
@@ -317,6 +334,22 @@ impl App {
                 self.refresh_storage();
                 self.refresh();
             }
+            Msg::UpdateChecked { tag, asked } => {
+                if asked && tag.is_none() {
+                    self.say(format!("hana {} is the latest version", update::current()));
+                }
+                self.update = tag;
+            }
+            Msg::Updated(result) => {
+                self.updating = false;
+                match result {
+                    Ok(tag) => {
+                        self.update = None;
+                        self.say(format!("Updated to {tag}. Restart hana to use it."));
+                    }
+                    Err(e) => self.say(format!("Update failed: {e}")),
+                }
+            }
             // Results of a superseded storage scan.
             _ => {}
         }
@@ -365,6 +398,43 @@ impl App {
                 disk::remove_worktree(wt, force, &snap, &mut outcome);
             }
             let _ = tx.send(Msg::Deleted(outcome));
+        });
+    }
+
+    /// Looks for a newer release in the background. `asked`: the user pressed U, so go to GitHub
+    /// now and say so if there is nothing new.
+    fn check_for_update(&mut self, asked: bool) {
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            let _ = tx.send(Msg::UpdateChecked { tag: update::check(asked), asked });
+        });
+    }
+
+    fn ask_update(&mut self) {
+        if self.updating {
+            return;
+        }
+        match self.update.clone() {
+            Some(tag) => {
+                let question = format!("Update hana {} to {tag}?\n\nThe new version is checked against the release's checksum first.", update::current());
+                self.mode = Mode::Confirm { question, action: Pending::Update(tag) };
+            }
+            None => {
+                self.say("Looking for a newer version…");
+                self.check_for_update(true);
+            }
+        }
+    }
+
+    fn install_update(&mut self, tag: String) {
+        self.updating = true;
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            let result = update::install(&tag).map(|()| tag);
+            if result.is_ok() {
+                let _ = update::check(true);
+            }
+            let _ = tx.send(Msg::Updated(result));
         });
     }
 
@@ -440,73 +510,85 @@ impl App {
         let now = scanner::now_ms();
 
         if r.orphans.is_empty() {
-            rows.push(self.section("LEFT BEHIND", String::new()));
-            rows.push(self.note("clean", t.clean, t.good));
+            rows.push(Row {
+                kind: RowKind::Section,
+                key: "sec:clean".into(),
+                line: Line::from(Span::styled(format!(" {}", t.clean.trim()), Style::new().fg(t.good))),
+            });
         } else {
-            rows.push(self.section(
-                "LEFT BEHIND",
-                format!(
-                    "{} from {} · {}",
-                    plural(r.orphan_count(), "process"),
-                    plural(r.orphans.len(), "closed session"),
-                    format_bytes(r.orphan_memory())
-                ),
-            ));
+            rows.push(self.section("LEFT BEHIND", format!("{} · {}", plural(r.orphan_count(), "process"), format_bytes(r.orphan_memory()))));
             for (g, group) in r.orphans.iter().enumerate() {
-                rows.push(self.group_row(RowKind::Orphan(g), group, width));
-                for (p, proc) in group.procs.iter().enumerate() {
-                    rows.push(self.proc_row(RowKind::OrphanProc(g, p), proc, width));
+                let row = self.group_row(RowKind::Orphan(g), group, true, width);
+                let open = self.expanded(&row.key, true);
+                rows.push(row);
+                if open {
+                    for (p, proc) in group.procs.iter().enumerate() {
+                        rows.push(self.proc_row(RowKind::OrphanProc(g, p), proc, width));
+                    }
                 }
             }
         }
 
         rows.push(Self::gap("gap1"));
         let idle_count = r.idle_sessions(&self.cfg).len();
-        let summary = if r.sessions.is_empty() {
-            String::new()
-        } else if idle_count > 0 {
-            format!("{} · {} idle over {}", r.sessions.len(), idle_count, format_limit(self.cfg.idle_limit_minutes))
-        } else {
-            r.sessions.len().to_string()
-        };
+        let summary = if idle_count > 0 { format!("{} idle over {}", idle_count, format_limit(self.cfg.idle_limit_minutes)) } else { String::new() };
         rows.push(self.section("OPEN SESSIONS", summary));
         if r.sessions.is_empty() {
             rows.push(self.note("nosessions", t.no_sessions, t.dim));
         }
         for (s, session) in r.sessions.iter().enumerate() {
-            rows.push(self.session_row(s, session, now, width));
-            for (p, proc) in session.procs.iter().enumerate() {
-                rows.push(self.proc_row(RowKind::SessionProc(s, p), proc, width));
+            let row = self.session_row(s, session, now, width);
+            let open = self.expanded(&row.key, false);
+            rows.push(row);
+            if open {
+                for (p, proc) in session.procs.iter().enumerate() {
+                    rows.push(self.proc_row(RowKind::SessionProc(s, p), proc, width));
+                }
             }
         }
 
         if !r.live.is_empty() {
             rows.push(Self::gap("gap2"));
-            rows.push(self.section("RUNNING IN OTHER SESSIONS", String::new()));
+            rows.push(self.section("IN OTHER SESSIONS", String::new()));
             for (g, group) in r.live.iter().enumerate() {
-                rows.push(self.group_row(RowKind::Live(g), group, width));
-                for (p, proc) in group.procs.iter().enumerate() {
-                    rows.push(self.proc_row(RowKind::LiveProc(g, p), proc, width));
+                let row = self.group_row(RowKind::Live(g), group, false, width);
+                let open = self.expanded(&row.key, false);
+                rows.push(row);
+                if open {
+                    for (p, proc) in group.procs.iter().enumerate() {
+                        rows.push(self.proc_row(RowKind::LiveProc(g, p), proc, width));
+                    }
                 }
             }
         }
         rows
     }
 
-    fn group_row(&self, kind: RowKind, group: &SessionGroup, width: usize) -> Row {
+    /// Whether a session's processes are listed under it: `default` unless toggled with enter.
+    fn expanded(&self, key: &str, default: bool) -> bool {
+        default != self.toggled.contains(key)
+    }
+
+    /// - when a row's processes are listed under it, + when they are folded away. Plain ASCII: some
+    /// terminals draw arrow glyphs two columns wide.
+    fn fold_span(&self, open: bool) -> Span<'static> {
+        Span::styled(if open { " - " } else { " + " }, Style::new().fg(self.theme().dim))
+    }
+
+    fn group_row(&self, kind: RowKind, group: &SessionGroup, open_default: bool, width: usize) -> Row {
         let t = self.theme();
-        let mut left = vec![Span::styled(format!(" {}", group.project), Style::new().fg(t.text).bold())];
+        let key = format!("{}:{}", kind_prefix(&kind), group.id);
+        let mut left = vec![self.fold_span(self.expanded(&key, open_default)), Span::styled(group.project.clone(), Style::new().fg(t.text).bold())];
         if let Some(title) = &group.title {
             left.push(Span::styled(format!(" — {title}"), Style::new().fg(t.text)));
         }
-        left.push(Span::styled(format!("  {}", group.short_id()), Style::new().fg(t.dim)));
         let busy = group.procs.iter().any(|p| self.killing.contains(&p.pid));
         let right = if busy {
             Span::styled(format!("{:>28} ", t.killing), Style::new().fg(t.accent))
         } else {
             Span::raw(format!("{:>12}{:>10}{:>6} ", plural(group.procs.len(), "proc"), format_bytes(group.memory()), human_age(group.oldest())))
         };
-        Row { key: format!("{}:{}", kind_prefix(&kind), group.id), kind, line: fit(left, right, width) }
+        Row { key, kind, line: fit(left, right, width) }
     }
 
     fn proc_row(&self, kind: RowKind, proc: &Proc, width: usize) -> Row {
@@ -540,9 +622,12 @@ impl App {
             (Status::Other(o), _) => (Span::styled(t.unknown_dot, Style::new().fg(t.dim)), o.clone()),
             (Status::Unknown, _) => (Span::styled(t.unknown_dot, Style::new().fg(t.dim)), "open".into()),
         };
+        let key = format!("s:{}:{}", session.process.pid, session.process.created);
+        let dot = Span::styled(dot.content.trim().to_string(), dot.style);
         let mut left = vec![
+            self.fold_span(self.expanded(&key, false)),
             dot,
-            Span::styled(format!(" {status:<9} "), Style::new().fg(t.dim)),
+            Span::raw(" "),
             Span::styled(session.project.clone(), Style::new().fg(t.text).bold()),
         ];
         if let Some(title) = &session.title {
@@ -552,11 +637,11 @@ impl App {
             Span::styled(format!("{:>28} ", t.ending), Style::new().fg(t.accent))
         } else {
             Span::styled(
-                format!("{:>12}{:>10}{:>6} ", format!("pid {}", session.process.pid), format_bytes(session.memory()), human_age(session.process.age)),
+                format!("{:>12}{:>10}{:>6} ", status, format_bytes(session.memory()), human_age(session.process.age)),
                 Style::new().fg(t.text),
             )
         };
-        Row { key: format!("s:{}:{}", session.process.pid, session.process.created), kind: RowKind::Session(s), line: fit(left, right, width) }
+        Row { key, kind: RowKind::Session(s), line: fit(left, right, width) }
     }
 
     fn mark_span(&self, key: &str) -> Span<'static> {
@@ -618,32 +703,31 @@ impl App {
                 Some(b) => format_bytes(b),
                 None => "…".into(),
             };
-            let right = Span::styled(format!("{:>14}{:>10} ", plural(wt.sessions.len(), "session"), size), Style::new().fg(t.text));
+            let sessions = if wt.sessions.is_empty() { String::new() } else { plural(wt.sessions.len(), "session") };
+            let right = Span::styled(format!("{:>14}{:>10} ", sessions, size), Style::new().fg(t.text));
             rows.push(Row { kind: RowKind::Worktree(i), key, line: fit(left, right, width) });
         }
 
         rows.push(Self::gap("gap3"));
         let old = s.sessions.iter().filter(|d| !d.open && d.age.unwrap_or(0) >= 30 * 86400).count();
-        rows.push(self.section(
-            "SESSION DATA",
-            format!("{} · {} · {old} untouched for 30+ days", plural(s.sessions.len(), "session"), format_bytes(s.session_bytes())),
-        ));
+        let mut summary = format!("{} · {}", plural(s.sessions.len(), "session"), format_bytes(s.session_bytes()));
+        if old > 0 {
+            summary.push_str(&format!(" · {old} older than 30 days"));
+        }
+        rows.push(self.section("SESSION DATA", summary));
         if s.sessions.is_empty() {
             rows.push(self.note("nodata", t.no_data, t.dim));
         }
         for (i, data) in s.sessions.iter().enumerate() {
             let key = format!("sd:{}", data.id);
             let mut left = vec![self.mark_span(&key)];
-            if data.open {
-                left.push(Span::styled(format!("{} ", t.busy_dot.trim()), Style::new().fg(t.good)));
-            }
             left.push(Span::styled(data.project.clone(), Style::new().fg(t.text).bold()));
             if let Some(title) = &data.title {
                 left.push(Span::styled(format!(" — {title}"), Style::new().fg(t.text)));
             }
-            left.push(Span::styled(format!("  {}", data.short_id()), Style::new().fg(t.dim)));
+            let age = if data.open { "open".to_string() } else { data.age.map(human_age).unwrap_or_default() };
             let right = Span::styled(
-                format!("{:>10}{:>6} ", format_bytes(data.bytes), data.age.map(human_age).unwrap_or_default()),
+                format!("{:>10}{:>6} ", format_bytes(data.bytes), age),
                 Style::new().fg(if data.open { t.dim } else { t.text }),
             );
             rows.push(Row { kind: RowKind::SessionData(i), key, line: fit(left, right, width) });
@@ -662,9 +746,8 @@ impl App {
         if t.bg.is_some() {
             f.render_widget(Block::new().style(t.base()), f.area());
         }
-        let details_height = if self.view == View::Storage { 7 } else { 5 };
         let [header, body, details, footer] =
-            Layout::vertical([Constraint::Length(2), Constraint::Min(4), Constraint::Length(details_height), Constraint::Length(1)]).areas(f.area());
+            Layout::vertical([Constraint::Length(2), Constraint::Min(4), Constraint::Length(3), Constraint::Length(1)]).areas(f.area());
 
         // One column of slack: terminals differ on how wide some symbols are, and a row that reaches
         // the last column can wrap.
@@ -711,28 +794,27 @@ impl App {
                 Span::styled(format!(" {label} "), Style::new().fg(t.dim))
             }
         };
-        let mut spans = vec![logo, Span::raw("  "), tab("1 processes", View::Processes), Span::raw(" "), tab("2 storage", View::Storage)];
-        spans.push(Span::styled(t.tagline, Style::new().fg(t.dim)));
-        let status = if self.view == View::Storage {
-            if self.storage_scanning {
-                "looking…".to_string()
-            } else if self.deleting {
-                t.deleting.to_string()
-            } else {
-                "r to rescan".to_string()
-            }
-        } else if self.scanning {
-            "scanning…".to_string()
-        } else if let Some(at) = self.last_scan {
-            format!("scanned {} ago · every {}s", human_age(at.elapsed().as_secs()), self.cfg.refresh_interval)
-        } else {
-            String::new()
+        let mut spans = vec![logo, Span::raw("  "), tab("processes", View::Processes), Span::raw(" "), tab("storage", View::Storage)];
+        // Only say something while work is under way.
+        let mut status_color = t.dim;
+        let status = match self.view {
+            View::Storage if self.deleting => t.deleting.to_string(),
+            View::Storage if self.storage_scanning => "looking…".to_string(),
+            View::Processes if self.scanning && self.result.is_none() => "scanning…".to_string(),
+            _ if self.updating => "updating…".to_string(),
+            _ => match &self.update {
+                Some(tag) => {
+                    status_color = t.accent;
+                    format!("{tag} available · U")
+                }
+                None => String::new(),
+            },
         };
         let used: usize = spans.iter().map(Span::width).sum();
         let status_width = Span::raw(status.as_str()).width();
         if used + status_width + 2 < area.width as usize {
             spans.push(Span::raw(" ".repeat(area.width as usize - used - status_width - 2)));
-            spans.push(Span::styled(status, Style::new().fg(t.dim)));
+            spans.push(Span::styled(status, Style::new().fg(status_color)));
         }
         let mut lines = vec![Line::from(spans)];
 
@@ -752,7 +834,7 @@ impl App {
         if second.is_empty() && self.view == View::Storage && !self.marked.is_empty() {
             let bytes = self.marked_bytes();
             second.push(Span::styled(
-                format!(" {} marked · {} · x to delete, u to unmark", self.marked.len(), format_bytes(bytes)),
+                format!(" {} marked · {}", self.marked.len(), format_bytes(bytes)),
                 Style::new().fg(t.accent),
             ));
         }
@@ -778,80 +860,45 @@ impl App {
         }
     }
 
+    /// Two lines about the selected row: where it is, and what it is.
     fn draw_details(&self, f: &mut Frame, area: Rect, kind: Option<&RowKind>) {
         let t = self.theme();
         let block = Block::new().borders(Borders::TOP).border_type(t.border).border_style(Style::new().fg(t.dim));
-        let mut lines: Vec<Line> = Vec::new();
-        let label = |s: &str| Span::styled(format!("{s:<10}"), Style::new().fg(t.dim));
+        let dim = |s: String| Span::styled(s, Style::new().fg(t.dim));
         let value = |s: String| Span::styled(s, Style::new().fg(t.text));
+        let mut lines: Vec<Line> = Vec::new();
         match kind {
             Some(RowKind::Worktree(i)) => {
                 if let Some(wt) = self.storage.as_ref().and_then(|s| s.worktrees.get(*i)) {
-                    lines.push(Line::from(vec![label("worktree"), value(wt.path.clone())]));
-                    let head = if wt.head.is_empty() { String::new() } else { format!(" at {}", &wt.head[..wt.head.len().min(10)]) };
-                    let branch = wt.branch.clone().map(|b| format!("branch {b} (kept when removed)")).unwrap_or_else(|| "detached HEAD".into());
-                    lines.push(Line::from(vec![label("checkout"), value(format!("{branch}{head}"))]));
+                    lines.push(Line::from(value(format!(" {}", wt.path))));
+                    let checkout = match &wt.branch {
+                        Some(b) => format!("branch {b}, kept when removed"),
+                        None => format!("detached at {}", &wt.head[..wt.head.len().min(7)]),
+                    };
                     let status = match (wt.dirty, wt.only_here) {
-                        (Some(0), Some(0)) => "clean: safe to remove".to_string(),
-                        (Some(d), o) => format!("{d} uncommitted · {} commits on no branch", o.unwrap_or(0)),
-                        _ if !wt.exists => "the folder is gone; removing prunes it from git".into(),
-                        _ if !wt.registered => "a leftover folder git does not know about".into(),
+                        (Some(0), Some(0)) => "clean, safe to remove".to_string(),
+                        (Some(d), o) => format!("{d} uncommitted, {} commits on no branch", o.unwrap_or(0)),
+                        _ if !wt.exists => "folder is gone; removing prunes it from git".into(),
+                        _ if !wt.registered => "a folder git does not know about".into(),
                         _ => "checking…".into(),
                     };
-                    lines.push(Line::from(vec![label("status"), value(status)]));
-                    let titles: Vec<String> = self
-                        .storage
-                        .as_ref()
-                        .map(|s| {
-                            wt.sessions
-                                .iter()
-                                .filter_map(|id| s.sessions.iter().find(|d| &d.id == id))
-                                .map(|d| d.title.clone().unwrap_or_else(|| d.short_id().to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    if !titles.is_empty() {
-                        lines.push(Line::from(vec![label("sessions"), value(titles.join(" · "))]));
-                    }
+                    lines.push(Line::from(dim(format!(" {checkout} · {status}"))));
                 }
             }
             Some(RowKind::SessionData(i)) => {
                 if let Some(d) = self.storage.as_ref().and_then(|s| s.sessions.get(*i)) {
-                    let mut first = vec![label("session"), value(d.id.clone())];
+                    lines.push(Line::from(value(format!(" {}", d.cwd.clone().unwrap_or_default()))));
+                    let mut second = vec![dim(format!(" {}", d.id))];
                     if d.open {
-                        first.push(Span::styled("  open now: close it to delete its data", Style::new().fg(t.good)));
+                        second.push(Span::styled("  open: close it to delete its data", Style::new().fg(t.good)));
                     }
-                    lines.push(Line::from(first));
-                    if let Some(cwd) = &d.cwd {
-                        lines.push(Line::from(vec![label("folder"), value(cwd.clone())]));
-                    }
-                    let mut parts = d.parts.clone();
-                    parts.sort_by(|a, b| b.bytes.cmp(&a.bytes));
-                    for p in parts.iter().take(4) {
-                        lines.push(Line::from(vec![
-                            label(p.kind.split(' ').next().unwrap_or(p.kind)),
-                            Span::styled(format!("{:>8}  ", format_bytes(p.bytes)), Style::new().fg(t.accent)),
-                            Span::styled(p.path.display().to_string(), Style::new().fg(t.dim)),
-                        ]));
-                    }
+                    lines.push(Line::from(second));
                 }
             }
             Some(kind) => {
                 if let Some(p) = self.selected_proc(kind) {
-                    let mut first = vec![label("pid"), value(p.pid.to_string())];
-                    if !p.helpers.is_empty() {
-                        first.push(Span::styled(
-                            format!("  + {} helper{}", p.helpers.len(), if p.helpers.len() == 1 { "" } else { "s" }),
-                            Style::new().fg(t.dim),
-                        ));
-                    }
-                    first.push(Span::styled(format!("   started {} ago", human_age(p.age)), Style::new().fg(t.dim)));
-                    if !p.ports.is_empty() {
-                        first.push(value(format!("   ports {}", p.ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "))));
-                    }
-                    lines.push(Line::from(first));
-                    lines.push(Line::from(vec![label("cwd"), value(p.cwd.clone())]));
-                    lines.push(Line::from(vec![label("command"), value(p.command.replace(['\n', '\r'], " "))]));
+                    lines.push(Line::from(vec![value(format!(" {}", p.cwd)), dim(format!("   pid {}", p.pid))]));
+                    lines.push(Line::from(dim(format!(" {}", p.command.replace(['\n', '\r'], " ")))));
                 } else if let Some(r) = &self.result {
                     let group = match *kind {
                         RowKind::Orphan(g) => r.orphans.get(g),
@@ -859,17 +906,14 @@ impl App {
                         _ => None,
                     };
                     if let Some(g) = group {
-                        lines.push(Line::from(vec![label("session"), value(g.id.clone())]));
-                        lines.push(Line::from(vec![label("project"), value(g.project.clone())]));
-                        if let Some(title) = &g.title {
-                            lines.push(Line::from(vec![label("title"), value(title.clone())]));
-                        }
+                        lines.push(Line::from(value(format!(" {}", g.project))));
+                        lines.push(Line::from(dim(format!(" session {}", g.id))));
                     }
                 }
             }
             None => {}
         }
-        f.render_widget(Paragraph::new(lines).block(block).wrap(Wrap { trim: false }), area);
+        f.render_widget(Paragraph::new(lines).block(block), area);
     }
 
     fn draw_footer(&self, f: &mut Frame, area: Rect) {
@@ -881,28 +925,8 @@ impl App {
             }
         }
         let keys: &[(&str, &str)] = match self.view {
-            View::Processes => &[
-                ("x", "kill"),
-                ("X", "kill all"),
-                ("i", "end idle"),
-                ("p", "protect"),
-                ("tab", "storage"),
-                ("s", "settings"),
-                ("t", "theme"),
-                ("?", "help"),
-                ("q", "quit"),
-            ],
-            View::Storage => &[
-                ("space", "mark"),
-                ("x", "delete"),
-                ("M", "mark 30d+"),
-                ("u", "unmark"),
-                ("r", "rescan"),
-                ("tab", "processes"),
-                ("t", "theme"),
-                ("?", "help"),
-                ("q", "quit"),
-            ],
+            View::Processes => &[("enter", "show"), ("x", "kill"), ("X", "kill all"), ("tab", "storage"), ("?", "more"), ("q", "quit")],
+            View::Storage => &[("space", "mark"), ("x", "delete"), ("tab", "processes"), ("?", "more"), ("q", "quit")],
         };
         let mut spans = vec![Span::raw(" ")];
         for (i, (k, what)) in keys.iter().enumerate() {
@@ -944,7 +968,7 @@ impl App {
 
     fn draw_settings(&self, f: &mut Frame, field: usize, editing: Option<&str>) {
         let t = self.theme();
-        let area = centered(f.area(), 72, 15);
+        let area = centered(f.area(), 64, 11);
         f.render_widget(Clear, area);
         let mark = |i: usize| if i == field { Span::styled(" ▸ ", Style::new().fg(t.accent)) } else { Span::raw("   ") };
         let name = |s: &str| Span::styled(format!("{s:<22}"), Style::new().fg(t.text));
@@ -966,14 +990,15 @@ impl App {
             ]),
             Line::from(vec![mark(3), name("Never kill"), protected]),
             Line::from(vec![mark(4), name("Look"), value(format!("◂ {} ▸", t.name))]),
-            Line::default(),
-            hint("   Commands containing a protected pattern are skipped by kill session,".into()),
-            hint("   kill all and end idle. Patterns are comma-separated.".into()),
+            Line::from(vec![
+                mark(5),
+                name("Check for updates"),
+                value(if self.cfg.check_for_updates { "[x] once a day".into() } else { "[ ] only with U".into() }),
+            ]),
             Line::default(),
             hint(
-                if editing.is_some() { "   enter save · esc cancel" } else { "   ↑↓ choose · ←→ change · space toggle · enter edit · esc close" }.into(),
+                if editing.is_some() { "   comma-separated · enter save · esc cancel" } else { "   ↑↓ choose · ←→ change · enter edit · esc close" }.into(),
             ),
-            hint(format!("   {}", Config::path().display())),
         ];
         let block = Block::bordered().border_type(t.border).style(t.base()).title(t.settings_title).border_style(Style::new().fg(t.accent));
         f.render_widget(Paragraph::new(lines).block(block), area);
@@ -981,42 +1006,31 @@ impl App {
 
     fn draw_help(&self, f: &mut Frame) {
         let t = self.theme();
-        let area = centered(f.area(), 82, 32);
-        f.render_widget(Clear, area);
         let key = |k: &str, what: &str| {
-            Line::from(vec![Span::styled(format!("  {k:<12}"), Style::new().fg(t.accent).bold()), Span::styled(what.to_string(), Style::new().fg(t.text))])
+            Line::from(vec![Span::styled(format!("  {k:<10}"), Style::new().fg(t.accent).bold()), Span::styled(what.to_string(), Style::new().fg(t.text))])
         };
         let head = |s: &str| Line::from(Span::styled(format!(" {s}"), Style::new().fg(t.info).bold()));
-        let dim = |s: &str| Line::from(Span::styled(format!("  {s}"), Style::new().fg(t.dim)));
         let lines = vec![
-            head("everywhere"),
-            key("↑ ↓  j k", "move · tab / 1 / 2 switch tabs · s settings · q quit"),
-            key("t / T", "next / previous theme (11 of them; also in settings)"),
-            Line::default(),
             head("processes"),
-            key("x  Del", "kill the selected process, or everything in the selected session"),
-            key("", "on an open session: end it (asks first)"),
-            key("X", "kill everything left behind (asks first)"),
-            key("i", "end sessions idle longer than the limit (asks first)"),
-            key("p", "protect / unprotect the selected program"),
-            key("c / o", "copy the command / open the process's folder"),
+            key("enter", "show / hide a session's processes"),
+            key("x", "kill the selection; on an open session, end it"),
+            key("X", "kill everything left behind"),
+            key("i", "end sessions idle past the limit"),
+            key("p", "protect / unprotect a program"),
             Line::default(),
             head("storage"),
-            key("space", "mark a worktree or session; M marks sessions untouched for 30+ days"),
-            key("x  Del", "delete what is marked (or the selected row), after asking"),
-            key("u / r", "unmark everything / scan again"),
-            dim("Session data (transcript, subagents, file history…) goes to the Recycle Bin."),
-            dim("Without its transcript a session can no longer be resumed. Open sessions are"),
-            dim("never touched, and neither is a project's memory folder."),
-            dim("Worktrees are removed with git worktree remove: the folder is deleted for good,"),
-            dim("its branch is kept. One with uncommitted changes or commits on no branch is"),
-            dim("only removed if you press F; one a process is working in, never."),
+            key("space", "mark · M mark older than 30 days · u unmark all"),
+            key("x", "delete marked (session data goes to the Recycle Bin)"),
             Line::default(),
-            dim("How it works: Claude Code marks everything it starts (CLAUDECODE=1, session ID,"),
-            dim("its PID). hana reads those; a process is left behind once its Claude Code is"),
-            dim("gone. Windows does not end children with their parent, so killing a row also"),
-            dim("ends what it started. Nothing leaves your machine."),
+            head("anywhere"),
+            key("↑↓ jk", "move · tab switch view · r rescan"),
+            key("c / o", "copy / open folder"),
+            key("t / T", "next / previous theme"),
+            key("s", "settings"),
+            key("U", "update hana"),
         ];
+        let area = centered(f.area(), 64, lines.len() as u16 + 2);
+        f.render_widget(Clear, area);
         let block = Block::bordered().border_type(t.border).style(t.base()).title(t.help_title).border_style(Style::new().fg(t.accent));
         f.render_widget(Paragraph::new(lines).block(block), area);
     }
@@ -1045,6 +1059,7 @@ impl App {
         match action {
             Pending::Kill(targets) => self.kill(targets),
             Pending::Delete { sessions, worktrees, .. } => self.delete(sessions, worktrees, force),
+            Pending::Update(tag) => self.install_update(tag),
         }
     }
 
@@ -1109,9 +1124,46 @@ impl App {
             KeyCode::Char('X') if self.view == View::Processes => self.ask_kill_all(),
             KeyCode::Char('i') if self.view == View::Processes => self.ask_end_idle(),
             KeyCode::Char('p') if self.view == View::Processes => self.toggle_protect(),
+            KeyCode::Enter | KeyCode::Right | KeyCode::Left if self.view == View::Processes => self.toggle_fold(key.code),
+            KeyCode::Char('U') => self.ask_update(),
             KeyCode::Char('c') => self.copy_selected(),
             KeyCode::Char('o') => self.open_selected_folder(),
             _ => {}
+        }
+    }
+
+    /// Enter shows or hides a session's processes; → shows, ← hides. On a process row, ← and enter
+    /// fold its session and select it.
+    fn toggle_fold(&mut self, code: KeyCode) {
+        let Some(kind) = self.selected_kind() else { return };
+        let parent = match kind {
+            RowKind::Orphan(_) | RowKind::Session(_) | RowKind::Live(_) => None,
+            RowKind::OrphanProc(g, _) => Some(RowKind::Orphan(g)),
+            RowKind::SessionProc(s, _) => Some(RowKind::Session(s)),
+            RowKind::LiveProc(g, _) => Some(RowKind::Live(g)),
+            _ => return,
+        };
+        if parent.is_some() && code == KeyCode::Right {
+            return;
+        }
+        let target = parent.unwrap_or(kind);
+        let rows = self.rows(200);
+        let Some((index, row)) = rows.iter().enumerate().find(|(_, r)| r.kind == target) else { return };
+        let open = rows.get(index + 1).is_some_and(|next| {
+            matches!(next.kind, RowKind::OrphanProc(..) | RowKind::SessionProc(..) | RowKind::LiveProc(..))
+        });
+        let want_open = match code {
+            KeyCode::Right => true,
+            KeyCode::Left => false,
+            _ => !open,
+        };
+        if want_open != open {
+            let key = row.key.clone();
+            if !self.toggled.remove(&key) {
+                self.toggled.insert(key.clone());
+            }
+            self.selected_key = Some(key);
+            self.state.select(Some(index));
         }
     }
 
@@ -1119,7 +1171,7 @@ impl App {
         let next = themes::cycle(&self.cfg.theme, forward);
         self.cfg.theme = next.name.into();
         self.save();
-        self.say(format!("{}  ·  {}  (t / T to keep browsing)", next.hello, next.blurb));
+        self.say(format!("theme: {}", next.name));
     }
 
     fn kill_selected(&mut self) {
@@ -1373,12 +1425,13 @@ impl App {
             }
             2 => app.cfg.ends_idle_sessions = !app.cfg.ends_idle_sessions,
             4 => app.cfg.theme = themes::cycle(&app.cfg.theme, up).name.into(),
+            5 => app.cfg.check_for_updates = !app.cfg.check_for_updates,
             _ => {}
         };
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('s') => return,
             KeyCode::Up | KeyCode::Char('k') => field = field.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => field = (field + 1).min(4),
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => field = (field + 1).min(5),
             KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('-') => {
                 change(self, field, false);
                 self.after_settings_change(field);
@@ -1387,7 +1440,7 @@ impl App {
                 change(self, field, true);
                 self.after_settings_change(field);
             }
-            KeyCode::Char(' ') | KeyCode::Enter if field == 2 || field == 4 => {
+            KeyCode::Char(' ') | KeyCode::Enter if matches!(field, 2 | 4 | 5) => {
                 change(self, field, true);
                 self.after_settings_change(field);
             }

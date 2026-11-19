@@ -5,6 +5,7 @@ mod scanner;
 mod store;
 mod themes;
 mod tui;
+mod update;
 mod win;
 
 use std::io::{self, BufRead, Write};
@@ -34,12 +35,14 @@ Looks:
 
 Other:
   hana config                          Print where settings are kept, and what they are
+  hana update [--check]                Update to the latest release (--check: only say if there is one)
   hana --help | --version
 
 Settings live in %APPDATA%\\hana\\config.json and can be changed from the interactive view (s).
 ";
 
 fn main() -> ExitCode {
+    update::clean_up();
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut cfg = Config::load();
     // --theme NAME or --theme=NAME; taken out so NAME is not read as a command.
@@ -89,6 +92,7 @@ fn main() -> ExitCode {
             show_themes(&cfg);
             Ok(())
         }
+        Some("update") => self_update(args.iter().any(|a| a == "--check")),
         Some("config") => {
             println!("{}", Config::path().display());
             println!("{}", serde_json::to_string_pretty(&cfg).unwrap_or_default());
@@ -106,6 +110,25 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn self_update(check_only: bool) -> io::Result<()> {
+    let current = update::current();
+    let latest = update::latest_tag().map_err(|e| io::Error::other(format!("could not reach GitHub: {e}")))?;
+    if !update::is_newer(&latest, current) {
+        println!("hana {current} is the latest version.");
+        return Ok(());
+    }
+    if check_only {
+        println!("hana {latest} is available (you have {current}). Run `hana update` to get it.");
+        return Ok(());
+    }
+    println!("Updating hana {current} → {latest}…");
+    update::install(&latest).map_err(io::Error::other)?;
+    // The next automatic check should not offer what is now installed.
+    let _ = update::check(true);
+    println!("Done. hana is now {latest}.");
+    Ok(())
 }
 
 fn group_title(project: &str, title: Option<&str>, id: &str) -> String {
