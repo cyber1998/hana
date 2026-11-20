@@ -1,6 +1,6 @@
 //! What Claude Code keeps on disk for each session, and the git worktrees its sessions work in.
 //!
-//! Per session, under ~/.claude:
+//! Per session, in Claude Code's data folder (see scanner::claude_dir):
 //!   projects/<project>/<id>.jsonl                  the transcript (`claude --resume` reads it)
 //!   projects/<project>/<id>/                       subagent transcripts and large tool output
 //!   projects/<project>/<id>.desktop-released.json  a marker left by Claude Desktop
@@ -495,26 +495,20 @@ mod tests {
         assert!(!is_uuid("123e4567-e89b-12d3-a456-42661417400z"));
     }
 
-    #[cfg(not(windows))]
+    /// Paths are built from the system's temp folder, so the test assumes no particular machine.
     #[test]
     fn finds_worktree_roots() {
-        let (repo, root) = scanner::worktree_of("/home/me/my code/demo/.claude/worktrees/feature-1a2b3c/src").unwrap();
-        assert_eq!(repo, "/home/me/my code/demo");
-        assert_eq!(root, "/home/me/my code/demo/.claude/worktrees/feature-1a2b3c");
-        assert_eq!(scanner::project_name("/home/me/my code/demo/.claude/worktrees/feature-1a2b3c"), "demo ⑂ feature-1a2b3c");
-        assert!(scanner::worktree_of("/home/me/my code/hana").is_none());
-        // Case matters on Linux: this is not Claude Code's worktree folder.
-        assert!(scanner::worktree_of("/home/me/demo/.Claude/Worktrees/x").is_none());
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn finds_worktree_roots() {
-        let (repo, root) = scanner::worktree_of(r"D:\My Code\demo\.claude\worktrees\feature-1a2b3c\src").unwrap();
-        assert_eq!(repo, r"D:\My Code\demo");
-        assert_eq!(root, r"D:\My Code\demo\.claude\worktrees\feature-1a2b3c");
-        assert_eq!(scanner::project_name(r"D:\My Code\demo\.claude\worktrees\feature-1a2b3c"), "demo ⑂ feature-1a2b3c");
-        assert!(scanner::worktree_of(r"D:\My Code\hana").is_none());
+        let text = |p: &Path| p.to_string_lossy().to_string();
+        let repo = std::env::temp_dir().join("my code").join("demo");
+        let root = repo.join(".claude").join("worktrees").join("feature-1a2b3c");
+        let (found_repo, found_root) = scanner::worktree_of(&text(&root.join("src"))).unwrap();
+        assert_eq!(found_repo, text(&repo));
+        assert_eq!(found_root, text(&root));
+        assert_eq!(scanner::project_name(&text(&root)), "demo ⑂ feature-1a2b3c");
+        assert!(scanner::worktree_of(&text(&repo)).is_none());
+        // Windows ignores case in paths; on Linux this is not Claude Code's worktree folder.
+        let shouting = repo.join(".Claude").join("Worktrees").join("x");
+        assert_eq!(scanner::worktree_of(&text(&shouting)).is_some(), os::CASE_INSENSITIVE);
     }
 
     /// A worktree made in a scratch repository: found, measured, refused while dirty, removed once clean.

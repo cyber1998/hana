@@ -742,7 +742,7 @@ impl App {
         Row { key: format!("{}:{}:{}", kind_prefix(&kind), proc.pid, proc.created), kind, line: fit(left, right, width) }
     }
 
-    /// What an open session is doing, as Claude Code reports it in ~/.claude/sessions/<pid>.json:
+    /// What an open session is doing, as Claude Code reports it in its sessions/<pid>.json:
     /// a short label and its color. Working is green; idle is amber, or the accent once past the
     /// idle limit.
     fn session_state(&self, session: &RunningSession, now: f64) -> (String, Color, bool) {
@@ -814,7 +814,7 @@ impl App {
         let t = self.theme();
         let mut rows = Vec::new();
         let Some(s) = &self.storage else {
-            rows.push(self.note("scanning", &format!("  {} Looking through ~/.claude and your repositories…", self.spinner()), t.dim));
+            rows.push(self.note("scanning", &format!("  {} Looking through Claude Code's data and your repositories…", self.spinner()), t.dim));
             return rows;
         };
         let now = scanner::now_ms();

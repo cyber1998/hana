@@ -49,7 +49,7 @@ pub fn epoch_ms(created: u64) -> Option<f64> {
     (created > 0).then(|| boot as f64 * 1000.0 + created as f64 * 1000.0 / ticks_per_second() as f64)
 }
 
-/// Where hana keeps its settings: $XDG_CONFIG_HOME, or ~/.config.
+/// Where hana keeps its settings: $XDG_CONFIG_HOME, or the .config folder in the home folder.
 pub fn config_base() -> PathBuf {
     match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
         Some(dir) => PathBuf::from(dir),
@@ -455,7 +455,9 @@ mod tests {
 
     #[test]
     fn trash_paths_and_dates() {
-        assert_eq!(percent_encode("/home/a b/ü.txt"), "/home/a%20b/%C3%BC.txt");
+        let path = std::env::temp_dir().join("a b").join("ü.txt");
+        let encoded = percent_encode(&path.to_string_lossy());
+        assert!(encoded.starts_with('/') && encoded.ends_with("/a%20b/%C3%BC.txt"), "{encoded}");
         let date = now_local_iso();
         assert_eq!(date.len(), 19);
         assert!(date.starts_with("20"));

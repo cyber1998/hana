@@ -83,7 +83,7 @@ fn tokens(args: &str) -> Vec<&str> {
     out
 }
 
-/// "C:\…" or "C:/…" anywhere; "/…" with at least two parts on Linux.
+/// A Windows path with a drive letter anywhere; on Linux also a path from the root with at least two parts.
 fn is_absolute_path(token: &str) -> bool {
     let b = token.as_bytes();
     let windows = b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/');
@@ -150,7 +150,7 @@ pub struct Snapshot {
     pub infos: HashMap<u32, Info>,
     pub now: u64,
     pub me: u32,
-    /// Claude Code's own records of its running processes, from ~/.claude/sessions, for PIDs they still describe.
+    /// Claude Code's own records of its running processes, from its sessions folder, for PIDs they still describe.
     records: HashMap<u32, Value>,
 }
 
@@ -184,7 +184,7 @@ impl Snapshot {
         snap
     }
 
-    /// Claude Code writes ~/.claude/sessions/<pid>.json for each interactive process, with its start time.
+    /// Claude Code writes sessions/<pid>.json in its data folder for each interactive process, with its start time.
     /// PIDs get reused, so a record only counts while that start time matches the running process.
     fn load_records(&self) -> HashMap<u32, Value> {
         let mut out = HashMap::new();
@@ -454,7 +454,7 @@ pub fn worktree_of(path: &str) -> Option<(String, String)> {
     Some((repo.clone(), format!("{repo}{WORKTREES_MARKER}{name}")))
 }
 
-/// "hana" for D:\My Code\hana, "demo ⑂ feature-1a2b3c" for a worktree of demo.
+/// The folder's own name ("hana" for a folder called hana), or "repo ⑂ name" for a Claude Code worktree.
 pub fn project_name(cwd: &str) -> String {
     if let Some((repo, root)) = worktree_of(cwd) {
         return format!("{} ⑂ {}", file_name(&repo), file_name(&root));
@@ -500,7 +500,7 @@ fn read_meta(sid: &str) -> SessionMeta {
         let project = match &cwd {
             Some(cwd) if !cwd.is_empty() => project_name(cwd),
             // Claude Code names each project folder after its path, with every non-alphanumeric character
-            // replaced by "-": D:\My Code\hana becomes D--My-Code-hana.
+            // replaced by "-", so its last part is the project's folder name.
             _ => {
                 let name = dir.file_name().to_string_lossy().to_string();
                 name.rsplit('-').find(|s| !s.is_empty()).unwrap_or(&name).to_string()
@@ -640,7 +640,7 @@ pub fn read_status(pid: u32, created: u64) -> Option<(Status, Option<f64>)> {
 
 /// Every open Claude Code session, with the background processes from `procs` that belong to it.
 ///
-/// The record in ~/.claude/sessions/<pid>.json is not a documented interface, so every field is
+/// The record in Claude Code's sessions/<pid>.json is not a documented interface, so every field is
 /// optional here: without it a session still shows, just without a status.
 pub fn sessions(snap: &Snapshot, procs: &[Proc], min_age: u64) -> Vec<RunningSession> {
     let mut claude: Vec<u32> = snap.infos.keys().copied().filter(|&pid| snap.is_claude(pid)).collect();
@@ -700,12 +700,14 @@ mod tests {
 
     #[test]
     fn shortens_commands() {
-        let p = proc_with(
-            r#""C:\Program Files\nodejs\node.exe" "C:\Users\me\app\node_modules\vite\bin\vite.js" --port 5173"#,
-            r"C:\Program Files\nodejs\node.exe",
-        );
-        assert_eq!(p.executable(), "node.exe");
-        assert_eq!(p.short_command(), "node.exe vite.js --port 5173");
+        // Absolute paths built from the temp folder; on Windows they hold spaces, so they are quoted.
+        let dir = std::env::temp_dir().join("some tools");
+        let exe = format!("node{}", std::env::consts::EXE_SUFFIX);
+        let node = dir.join("nodejs").join(&exe);
+        let vite = dir.join("app").join("node_modules").join("vite").join("bin").join("vite.js");
+        let p = proc_with(&format!("\"{}\" \"{}\" --port 5173", node.display(), vite.display()), &node.to_string_lossy());
+        assert_eq!(p.executable(), exe);
+        assert_eq!(p.short_command(), format!("{exe} vite.js --port 5173"));
 
         let q = proc_with("python -m http.server 8000", "");
         assert_eq!(q.short_command(), "python -m http.server 8000");

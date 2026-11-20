@@ -347,7 +347,7 @@ mod tests {
     #[test]
     fn protected_patterns_match_case_insensitively() {
         let cfg = Config { protected_patterns: vec!["WSL.exe".into(), " ".into()], ..Config::default() };
-        assert!(cfg.is_protected(r"C:\Windows\System32\wsl.exe -d Ubuntu"));
+        assert!(cfg.is_protected("wsl.exe -d Ubuntu"));
         assert!(!cfg.is_protected("node.exe server.js"));
     }
 }

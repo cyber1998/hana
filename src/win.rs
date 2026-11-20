@@ -47,15 +47,19 @@ pub fn epoch_ms(created: u64) -> Option<f64> {
     (created > UNIX_EPOCH_AS_FILETIME).then(|| (created - UNIX_EPOCH_AS_FILETIME) as f64 / 10_000.0)
 }
 
-/// Where hana keeps its settings: %APPDATA%.
+/// Where hana keeps its settings: the user's roaming application data folder.
 pub fn config_base() -> std::path::PathBuf {
     std::env::var_os("APPDATA").map(std::path::PathBuf::from).unwrap_or_else(|| ".".into())
 }
 
-/// curl.exe from System32, not whatever is first on PATH. It ships with Windows 10 (1803) and 11.
+/// curl.exe from Windows' own System32 folder, not whatever is first on PATH. It ships with
+/// Windows 10 (1803) and 11.
 pub fn curl_program() -> std::path::PathBuf {
-    let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| r"C:\Windows".into());
-    root.join("System32").join("curl.exe")
+    // Windows says where it is installed in %SystemRoot%; should that be missing, PATH decides.
+    match std::env::var_os("SystemRoot") {
+        Some(root) => std::path::PathBuf::from(root).join("System32").join("curl.exe"),
+        None => "curl.exe".into(),
+    }
 }
 
 /// A downloaded program can run as it is on Windows.
@@ -285,7 +289,7 @@ unsafe fn read_peb(handle: &Handle, out: &mut Inspected, want_env: bool) {
     }
     if let Some(cwd) = read_unicode_string(handle, params + PARAMS_CURRENT_DIRECTORY) {
         let trimmed = cwd.trim_end_matches('\\');
-        // Keep the backslash of a drive root, "C:\".
+        // A drive root keeps its backslash: without it the path would mean that drive's current folder.
         out.cwd = if trimmed.ends_with(':') { cwd } else { trimmed.to_string() };
     }
     if let Some(cmd) = read_unicode_string(handle, params + PARAMS_COMMAND_LINE) {
@@ -337,7 +341,8 @@ fn parse_env(block: &[u16]) -> HashMap<String, String> {
             break;
         }
         let text = String::from_utf16_lossy(entry);
-        // Names may start with "=" (e.g. "=C:=C:\"), so look for the separator after the first character.
+        // Names may start with "=" (Windows keeps each drive's current folder in such variables), so
+        // look for the separator after the first character.
         if let Some(eq) = text.char_indices().skip(1).find(|&(_, c)| c == '=').map(|(i, _)| i) {
             env.insert(text[..eq].to_ascii_uppercase(), text[eq + 1..].to_string());
         }
@@ -519,11 +524,15 @@ mod tests {
 
     #[test]
     fn parses_env_block() {
-        let text = "=C:=C:\\\0PATH=a;b\0Claudecode=1\0\0";
+        // Windows keeps each drive's current folder in a variable named "=<drive>:"; the drive here
+        // is whichever one the temp folder is on.
+        let temp = std::env::temp_dir().to_string_lossy().to_string();
+        let drive = temp[..2].to_ascii_uppercase();
+        let text = format!("={drive}={drive}\\\0PATH=a;b\0Claudecode=1\0\0");
         let block: Vec<u16> = text.encode_utf16().collect();
         let env = parse_env(&block);
         assert_eq!(env.get("CLAUDECODE").map(String::as_str), Some("1"));
         assert_eq!(env.get("PATH").map(String::as_str), Some("a;b"));
-        assert_eq!(env.get("=C:").map(String::as_str), Some("C:\\"));
+        assert_eq!(env.get(&format!("={drive}")).map(String::as_str), Some(format!("{drive}\\").as_str()));
     }
 }

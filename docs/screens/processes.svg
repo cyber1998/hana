@@ -47,9 +47,9 @@
 <text x="635.6" y="255.5" textLength="100.8" lengthAdjust="spacingAndGlyphs" fill="#FFD6A5" style="">    idle 25m</text>
 <text x="736.4" y="255.5" textLength="151.2" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style="">    356 MB    5h  </text>
 <text x="14.0" y="309.5" textLength="873.6" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
-<text x="14.0" y="327.5" textLength="134.4" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> D:\code\webshop</text>
-<text x="148.4" y="327.5" textLength="100.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">   pid 41208</text>
-<text x="14.0" y="345.5" textLength="646.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> "C:\Program Files\nodejs\node.exe" node_modules\vite\bin\vite.js --port 5173</text>
+<text x="14.0" y="327.5" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#FBE4EC" style=""> webshop</text>
+<text x="81.2" y="327.5" textLength="100.8" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style="">   pid 41208</text>
+<text x="14.0" y="345.5" textLength="428.4" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> node.exe node_modules\vite\bin\vite.js --port 5173</text>
 <text x="22.4" y="363.5" textLength="42.0" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">enter</text>
 <text x="64.4" y="363.5" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#A67F8E" style=""> show · </text>
 <text x="131.6" y="363.5" textLength="8.4" lengthAdjust="spacingAndGlyphs" fill="#F4A7C0" style="font-weight:700;">x</text>
