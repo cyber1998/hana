@@ -2,6 +2,7 @@
 
 mod bloom;
 mod disk;
+mod intro;
 mod scanner;
 mod store;
 mod themes;

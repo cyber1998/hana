@@ -270,6 +270,24 @@ fn to_svg(buf: &Buffer, theme: &Theme, title: &str) -> String {
                 );
             }
         }
+        // Half blocks are pixels: drawn as solid rectangles, the way a terminal shows them, rather
+        // than as stretched glyphs.
+        for x in 0..COLS {
+            let cell = &buf[(x, y)];
+            let top_half = match cell.symbol() {
+                "▀" => true,
+                "▄" => false,
+                _ => continue,
+            };
+            let _ = writeln!(
+                out,
+                r#"<rect x="{:.1}" y="{:.1}" width="{CELL_W:.1}" height="{:.1}" fill="{}"/>"#,
+                PAD + x as f32 * CELL_W,
+                if top_half { top } else { top + CELL_H / 2.0 },
+                CELL_H / 2.0,
+                hex(cell.fg, &default_fg),
+            );
+        }
         // Then text, in runs of one style.
         let mut x = 0;
         while x < COLS {
@@ -279,8 +297,19 @@ fn to_svg(buf: &Buffer, theme: &Theme, title: &str) -> String {
             let mut text = String::new();
             while x < COLS && buf[(x, y)].fg == fg && buf[(x, y)].modifier == modifier {
                 // A wide character's second cell is empty; the first one already holds it.
-                text.push_str(buf[(x, y)].symbol());
+                let symbol = buf[(x, y)].symbol();
+                // A wide character (花) gets a text element of its own, two cells wide, so the
+                // stretching below does not spread it across its neighbours.
+                let wide = unicode_width::UnicodeWidthStr::width(symbol) == 2;
+                if wide && x > start {
+                    break;
+                }
+                text.push_str(if matches!(symbol, "▀" | "▄") { " " } else { symbol });
                 x += 1;
+                if wide {
+                    x += 1;
+                    break;
+                }
             }
             if text.trim().is_empty() {
                 continue;
@@ -342,4 +371,18 @@ fn readme_screens() {
     a.bloom = Instant::now().checked_sub(Duration::from_millis(1500));
     let buf = render(&mut a, 18);
     save("cleanup.svg", &to_svg(&buf, a.theme(), "hana · after a cleanup"));
+
+    // The intro, once the flower is open.
+    for (name, ms) in [("intro.svg", 1300)] {
+        let t = crate::themes::by_name("cherry-blossom");
+        let mut terminal = Terminal::new(TestBackend::new(COLS, 22)).expect("test terminal");
+        terminal
+            .draw(|f| {
+                f.render_widget(Block::new().style(t.base()), f.area());
+                let area = f.area();
+                crate::intro::draw(f.buffer_mut(), area, Duration::from_millis(ms), t);
+            })
+            .expect("draw");
+        save(name, &to_svg(terminal.backend().buffer(), t, "hana"));
+    }
 }

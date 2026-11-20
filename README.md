@@ -116,6 +116,11 @@ On top of that:
 - **Idle sessions can be ended**, either when you ask or automatically after a limit you set. Auto-ending is off by default.
 - **Protected programs** are never touched by bulk kills.
 - **Eleven themes**, shown below.
+- **It opens with a bloom.** A cherry blossom unfolds for a moment before the view appears; any key skips it.
+
+<p align="center">
+  <img src="docs/screens/intro.svg" alt="hana's opening: a pixel-art cherry blossom with five notched pink petals and a gold centre, above the words hana and cleans up after Claude Code" width="100%">
+</p>
 
 <p align="center">
   <img src="docs/screens/storage.svg" alt="hana's storage tab: two git worktrees with their sizes, one with uncommitted changes, and eight sessions' data with size and when each was last used, two old ones marked for deletion" width="100%">
@@ -193,7 +198,7 @@ hana themes · hana --theme <name> · hana config · hana --help
 
 </details>
 
-Settings (scan interval, idle limit, auto-end, protected programs, theme, update checks) are in `%APPDATA%\hana\config.json`, and you can change them in the app with `s`.
+Settings (scan interval, idle limit, auto-end, protected programs, theme, update checks) are in `config.json`: in `%APPDATA%\hana` on Windows, `~/.config/hana` on Linux. Change them in the app with `s`. To skip the flower hana opens with, set `"show_intro": false` there.
 
 ---
 

@@ -30,6 +30,8 @@ pub struct Config {
     pub theme: String,
     /// Look for a newer release on GitHub, at most once a day.
     pub check_for_updates: bool,
+    /// Show the blooming flower for a moment before the interactive view opens.
+    pub show_intro: bool,
 }
 
 impl Default for Config {
@@ -41,6 +43,7 @@ impl Default for Config {
             ends_idle_sessions: false,
             theme: crate::themes::DEFAULT.name.into(),
             check_for_updates: true,
+            show_intro: true,
         }
     }
 }

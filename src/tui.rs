@@ -16,6 +16,7 @@ use ratatui::{DefaultTerminal, Frame};
 use unicode_width::UnicodeWidthChar;
 
 use crate::bloom;
+use crate::intro;
 use crate::os;
 use crate::disk::{self, Outcome, SessionData, StorageResult, Worktree};
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot, Status};
@@ -135,10 +136,36 @@ pub fn run(cfg: &mut Config, storage_first: bool) -> io::Result<()> {
     if storage_first {
         app.switch_view(View::Storage);
     }
+    // The scans above run in the background meanwhile, so the view opens with something to show.
+    if app.cfg.show_intro {
+        play_intro(&mut terminal, app.theme())?;
+    }
     let outcome = app.event_loop(&mut terminal);
     ratatui::restore();
     *cfg = app.cfg;
     outcome
+}
+
+/// The blooming flower, until it has played or a key is pressed. The key only skips it.
+fn play_intro(terminal: &mut DefaultTerminal, t: &'static Theme) -> io::Result<()> {
+    let start = Instant::now();
+    while start.elapsed() < intro::LENGTH {
+        terminal.draw(|f| {
+            if t.bg.is_some() {
+                f.render_widget(Block::new().style(t.base()), f.area());
+            }
+            let area = f.area();
+            intro::draw(f.buffer_mut(), area, start.elapsed(), t);
+        })?;
+        if event::poll(Duration::from_millis(30))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 impl App {
