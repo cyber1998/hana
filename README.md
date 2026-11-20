@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="hana: cleans up after Claude Code on Windows" width="100%">
+  <img src="docs/banner.svg" alt="hana: cleans up after Claude Code on Windows and Linux" width="100%">
 </p>
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-F4A7C0?style=flat-square&logo=windows&logoColor=white&labelColor=1F1520">
+  <img alt="Linux x86-64" src="https://img.shields.io/badge/Linux-x86--64-F4A7C0?style=flat-square&logo=linux&logoColor=white&labelColor=1F1520">
   <img alt="Written in Rust" src="https://img.shields.io/badge/Rust-stable-F74C00?style=flat-square&logo=rust&logoColor=white&labelColor=1F1520">
   <a href="https://github.com/cyber1998/hana/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cyber1998/hana?style=flat-square&color=F4A7C0&labelColor=1F1520"></a>
   <a href="https://github.com/cyber1998/hana/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/cyber1998/hana/total?style=flat-square&color=F4A7C0&labelColor=1F1520&label=downloads"></a>

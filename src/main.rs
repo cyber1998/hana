@@ -21,7 +21,7 @@ use std::time::Duration;
 use store::{format_bytes, human_age, plural, Config, Target};
 
 const HELP: &str = "\
-hana - cleans up after Claude Code on Windows
+hana - cleans up after Claude Code on Windows and Linux
 
 Processes:
   hana [--storage]                     Open the interactive view (on the storage tab)
