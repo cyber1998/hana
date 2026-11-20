@@ -9,9 +9,8 @@ use std::sync::{Mutex, OnceLock};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::win;
+use crate::os;
 
-const TICKS_PER_SECOND: u64 = 10_000_000;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Helper {
@@ -25,7 +24,7 @@ pub struct Proc {
     pub pid: u32,
     /// The parent, or 0 when the parent has exited (Windows does not reparent orphans).
     pub ppid: u32,
-    /// Creation time as a FILETIME; together with the PID it identifies the process.
+    /// Start time in the system's own ticks (see os::ticks_per_second); with the PID it identifies the process.
     pub created: u64,
     /// Seconds since the process started.
     pub age: u64,
@@ -84,9 +83,12 @@ fn tokens(args: &str) -> Vec<&str> {
     out
 }
 
+/// "C:\…" or "C:/…" anywhere; "/…" with at least two parts on Linux.
 fn is_absolute_path(token: &str) -> bool {
     let b = token.as_bytes();
-    b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')
+    let windows = b.len() > 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/');
+    let unix = cfg!(not(windows)) && b.len() > 1 && b[0] == b'/' && token[1..].contains('/');
+    windows || unix
 }
 
 impl Proc {
@@ -154,15 +156,15 @@ pub struct Snapshot {
 
 impl Snapshot {
     pub fn take() -> Snapshot {
-        let me = win::current_pid();
-        let now = win::now_filetime();
+        let me = os::current_pid();
+        let now = os::now_ticks();
         let mut infos = HashMap::new();
-        for entry in win::list_processes() {
+        for entry in os::list_processes() {
             // The idle process and the kernel.
             if entry.pid == 0 || entry.pid == 4 {
                 continue;
             }
-            let found = win::inspect(entry.pid, true);
+            let found = os::inspect(entry.pid, true);
             infos.insert(
                 entry.pid,
                 Info {
@@ -196,12 +198,7 @@ impl Snapshot {
             let Some(info) = self.infos.get(&pid) else { continue };
             let Ok(text) = fs::read_to_string(&path) else { continue };
             let Ok(json) = serde_json::from_str::<Value>(&text) else { continue };
-            let recorded = match json.get("procStart") {
-                Some(Value::String(s)) => s.trim().to_string(),
-                Some(Value::Number(n)) => n.to_string(),
-                _ => continue,
-            };
-            if info.created != 0 && recorded == info.created.to_string() {
+            if record_matches(&json, info.created) {
                 out.insert(pid, json);
             }
         }
@@ -236,8 +233,9 @@ impl Snapshot {
                 let desktop_app = path.contains("\\windowsapps\\claude_") || path.contains("\\anthropicclaude\\") || cmd.contains("--type=");
                 !desktop_app
             }
-            "node.exe" | "bun.exe" => cmd.contains("@anthropic-ai\\claude-code") || cmd.contains("@anthropic-ai/claude-code"),
-            _ => false,
+            "node.exe" | "bun.exe" | "node" | "bun" => cmd.contains("@anthropic-ai\\claude-code") || cmd.contains("@anthropic-ai/claude-code"),
+            // Linux's native installer keeps each version as a file named after it, under …/claude/versions/.
+            _ => path.contains("/claude/versions/"),
         }
     }
 
@@ -258,7 +256,7 @@ impl Snapshot {
 
     pub fn age(&self, pid: u32) -> u64 {
         match self.infos.get(&pid) {
-            Some(info) if info.created != 0 && info.created < self.now => (self.now - info.created) / TICKS_PER_SECOND,
+            Some(info) if info.created != 0 && info.created < self.now => (self.now - info.created) / os::ticks_per_second(),
             _ => 0,
         }
     }
@@ -388,7 +386,7 @@ pub fn scan(snap: &Snapshot) -> Vec<Proc> {
     }
     let mut procs: Vec<Proc> = procs.into_iter().enumerate().filter(|(i, _)| fold_into[*i].is_none()).map(|(_, p)| p).collect();
 
-    let ports = win::listening_ports();
+    let ports = os::listening_ports();
     for p in &mut procs {
         for pid in p.pids() {
             p.memory += snap.infos.get(&pid).map_or(0, |i| i.memory);
@@ -438,16 +436,21 @@ pub struct SessionMeta {
     pub cwd: Option<String>,
 }
 
-/// Marks the folders Claude Code creates worktrees in: <repo>\.claude\worktrees\<name>.
+/// Marks the folders Claude Code creates worktrees in: <repo>/.claude/worktrees/<name>, with this
+/// system's separators.
+#[cfg(windows)]
 pub const WORKTREES_MARKER: &str = "\\.claude\\worktrees\\";
+#[cfg(not(windows))]
+pub const WORKTREES_MARKER: &str = "/.claude/worktrees/";
 
 /// Splits a path inside a Claude Code worktree into (repo root, worktree root).
 pub fn worktree_of(path: &str) -> Option<(String, String)> {
-    let normal = path.replace('/', "\\");
-    let at = normal.to_lowercase().find(WORKTREES_MARKER)?;
+    let normal = os::native(path);
+    // ASCII-only lowercasing keeps byte positions, so `at` points into `normal` too.
+    let at = if os::CASE_INSENSITIVE { normal.to_ascii_lowercase().find(WORKTREES_MARKER)? } else { normal.find(WORKTREES_MARKER)? };
     let repo = normal[..at].to_string();
     let rest = &normal[at + WORKTREES_MARKER.len()..];
-    let name = rest.split('\\').next().filter(|n| !n.is_empty())?;
+    let name = rest.split(os::SEP).next().filter(|n| !n.is_empty())?;
     Some((repo.clone(), format!("{repo}{WORKTREES_MARKER}{name}")))
 }
 
@@ -603,17 +606,36 @@ fn status_of(record: &Value) -> (Status, Option<f64>) {
     (status, since)
 }
 
+/// Whether a session record describes this process, and not an earlier one that had the same PID.
+/// Claude Code records the process's start time ("procStart"; on Windows exactly the creation time
+/// hana reads). Where that does not match hana's unit, the session's start ("startedAt", ms since
+/// 1970) must be within a few seconds of when the process started.
+fn record_matches(record: &Value, created: u64) -> bool {
+    if created == 0 {
+        return false;
+    }
+    let exact = match record.get("procStart") {
+        Some(Value::String(s)) => Some(s.trim().to_string()),
+        Some(Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    };
+    if exact.is_some_and(|e| e == created.to_string()) {
+        return true;
+    }
+    let started = record.get("startedAt").and_then(|v| match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.parse().ok(),
+        _ => None,
+    });
+    matches!((started, os::epoch_ms(created)), (Some(s), Some(c)) if (s - c).abs() < 10_000.0)
+}
+
 /// The current status of the session in Claude Code process `pid`, re-read from its record. Cheap
 /// enough to call every few seconds. None if the record is gone or belongs to an older process.
 pub fn read_status(pid: u32, created: u64) -> Option<(Status, Option<f64>)> {
     let text = fs::read_to_string(claude_dir().join("sessions").join(format!("{pid}.json"))).ok()?;
     let json: Value = serde_json::from_str(&text).ok()?;
-    let recorded = match json.get("procStart")? {
-        Value::String(s) => s.trim().to_string(),
-        Value::Number(n) => n.to_string(),
-        _ => return None,
-    };
-    (recorded == created.to_string()).then(|| status_of(&json))
+    record_matches(&json, created).then(|| status_of(&json))
 }
 
 /// Every open Claude Code session, with the background processes from `procs` that belong to it.

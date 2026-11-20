@@ -18,7 +18,7 @@ use std::time::SystemTime;
 use serde::Serialize;
 
 use crate::scanner::{self, claude_dir, Snapshot, UNKNOWN_PROJECT, WORKTREES_MARKER};
-use crate::win;
+use crate::os;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Part {
@@ -195,8 +195,16 @@ fn git(dir: &str, args: &[&str]) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-fn norm(path: &str) -> String {
-    path.replace('/', "\\").trim_end_matches('\\').to_lowercase()
+/// A path in one comparable form: this system's separators, no trailing one, and lowercase where
+/// the system ignores case.
+pub fn norm(path: &str) -> String {
+    let p = os::native(path);
+    let p = p.trim_end_matches(os::SEP);
+    if os::CASE_INSENSITIVE {
+        p.to_lowercase()
+    } else {
+        p.to_string()
+    }
 }
 
 /// Worktrees of every repository that a session worked in (other than each repository's main folder).
@@ -220,7 +228,7 @@ pub fn find_worktrees(cwds: &[String]) -> Vec<Worktree> {
         let Some(list) = git(&candidate, &["worktree", "list", "--porcelain"]) else { continue };
         let mut blocks = list.split("\n\n").filter(|b| !b.trim().is_empty());
         let Some(main) = blocks.next().and_then(|b| b.lines().find_map(|l| l.strip_prefix("worktree "))) else { continue };
-        let main = main.replace('/', "\\");
+        let main = os::native(main);
         let mut registered = HashSet::new();
         for block in blocks {
             let mut wt = Worktree {
@@ -238,7 +246,7 @@ pub fn find_worktrees(cwds: &[String]) -> Vec<Worktree> {
             };
             for line in block.lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
-                    wt.path = p.replace('/', "\\");
+                    wt.path = os::native(p);
                 } else if let Some(h) = line.strip_prefix("HEAD ") {
                     wt.head = h.to_string();
                 } else if let Some(b) = line.strip_prefix("branch ") {
@@ -255,7 +263,7 @@ pub fn find_worktrees(cwds: &[String]) -> Vec<Worktree> {
             out.push(wt);
         }
         // Folders git no longer knows about, e.g. after a crash halfway through removing one.
-        let folder = format!("{main}{}", WORKTREES_MARKER.trim_end_matches('\\'));
+        let folder = format!("{main}{}", WORKTREES_MARKER.trim_end_matches(os::SEP));
         if let Ok(entries) = fs::read_dir(&folder) {
             for entry in entries.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir())) {
                 let path = entry.path().to_string_lossy().to_string();
@@ -330,7 +338,7 @@ pub fn busy_in(path: &str, snap: &Snapshot) -> Vec<String> {
     let mut names: Vec<String> = snap
         .infos
         .iter()
-        .filter(|(&pid, i)| pid != snap.me && !i.cwd.is_empty() && (norm(&i.cwd) == root || norm(&i.cwd).starts_with(&format!("{root}\\"))))
+        .filter(|(&pid, i)| pid != snap.me && !i.cwd.is_empty() && (norm(&i.cwd) == root || norm(&i.cwd).starts_with(&format!("{root}{}", os::SEP))))
         .map(|(pid, i)| format!("{} ({pid})", i.name))
         .collect();
     names.sort();
@@ -346,7 +354,7 @@ pub struct Outcome {
     pub problems: Vec<String>,
 }
 
-/// Moves the data of these sessions to the Recycle Bin. Open sessions are skipped.
+/// Moves the data of these sessions to the Recycle Bin (the trash on Linux). Open sessions are skipped.
 pub fn delete_sessions(sessions: &[SessionData], open: &HashSet<String>, out: &mut Outcome) {
     let (skip, go): (Vec<&SessionData>, Vec<&SessionData>) = sessions.iter().partition(|s| open.contains(&s.id));
     for s in skip {
@@ -356,7 +364,7 @@ pub fn delete_sessions(sessions: &[SessionData], open: &HashSet<String>, out: &m
     if paths.is_empty() {
         return;
     }
-    match win::recycle(&paths) {
+    match os::recycle(&paths) {
         Ok(()) => {
             out.sessions_deleted += go.len();
             out.freed += go.iter().map(|s| s.bytes).sum::<u64>();
@@ -487,6 +495,19 @@ mod tests {
         assert!(!is_uuid("123e4567-e89b-12d3-a456-42661417400z"));
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn finds_worktree_roots() {
+        let (repo, root) = scanner::worktree_of("/home/me/my code/demo/.claude/worktrees/feature-1a2b3c/src").unwrap();
+        assert_eq!(repo, "/home/me/my code/demo");
+        assert_eq!(root, "/home/me/my code/demo/.claude/worktrees/feature-1a2b3c");
+        assert_eq!(scanner::project_name("/home/me/my code/demo/.claude/worktrees/feature-1a2b3c"), "demo ⑂ feature-1a2b3c");
+        assert!(scanner::worktree_of("/home/me/my code/hana").is_none());
+        // Case matters on Linux: this is not Claude Code's worktree folder.
+        assert!(scanner::worktree_of("/home/me/demo/.Claude/Worktrees/x").is_none());
+    }
+
+    #[cfg(windows)]
     #[test]
     fn finds_worktree_roots() {
         let (repo, root) = scanner::worktree_of(r"D:\My Code\demo\.claude\worktrees\feature-1a2b3c\src").unwrap();
@@ -499,7 +520,7 @@ mod tests {
     /// A worktree made in a scratch repository: found, measured, refused while dirty, removed once clean.
     #[test]
     fn worktree_lifecycle() {
-        let base = std::env::temp_dir().join(format!("hana-wt-test-{}", win::current_pid()));
+        let base = std::env::temp_dir().join(format!("hana-wt-test-{}", os::current_pid()));
         let _ = force_remove_dir(&base);
         let repo = base.join("repo");
         fs::create_dir_all(&repo).unwrap();
@@ -509,7 +530,7 @@ mod tests {
         fs::write(repo.join("a.txt"), "a").unwrap();
         sh(&["add", "."]);
         sh(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a"]);
-        let wt_path = format!(r"{r}\.claude\worktrees\feature-1");
+        let wt_path = repo.join(".claude").join("worktrees").join("feature-1").to_string_lossy().to_string();
         sh(&["worktree", "add", "-q", "--detach", &wt_path]);
 
         let found = find_worktrees(&[wt_path.clone()]);

@@ -7,7 +7,12 @@ mod store;
 mod themes;
 mod tui;
 mod update;
-mod win;
+// The system layer: the same functions over Win32 or /proc.
+#[cfg_attr(windows, path = "win.rs")]
+#[cfg_attr(target_os = "linux", path = "linux.rs")]
+mod os;
+#[cfg(not(any(windows, target_os = "linux")))]
+compile_error!("hana runs on Windows and Linux");
 
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
@@ -26,7 +31,7 @@ Processes:
 
 Storage:
   hana disk [--json]                   How much each worktree and each session's data weighs
-  hana delete-session <id>... [-y]     Move sessions' data to the Recycle Bin (ID or its prefix)
+  hana delete-session <id>... [-y]     Move sessions' data to the Recycle Bin or trash (ID or prefix)
   hana remove-worktree <path|name> [--force] [-y]
                                        git worktree remove; --force also drops uncommitted work
 
@@ -39,7 +44,7 @@ Other:
   hana update [--check]                Update to the latest release (--check: only say if there is one)
   hana --help | --version
 
-Settings live in %APPDATA%\\hana\\config.json and can be changed from the interactive view (s).
+Settings can be changed in the interactive view (s); `hana config` shows where they are kept.
 ";
 
 fn main() -> ExitCode {
@@ -371,8 +376,8 @@ fn delete_sessions(ids: &[&str], yes: bool) -> io::Result<()> {
             println!("             {:>9}  {}", format_bytes(p.bytes), p.path.display());
         }
     }
-    let question = "Move this to the Recycle Bin? Sessions without a transcript can no longer be resumed.";
-    if !yes && !confirm(question) {
+    let question = format!("Move this to the {}? Sessions without a transcript can no longer be resumed.", os::TRASH_NAME);
+    if !yes && !confirm(&question) {
         return Ok(());
     }
     let (open, _) = open_sessions();
@@ -381,7 +386,7 @@ fn delete_sessions(ids: &[&str], yes: bool) -> io::Result<()> {
     for p in &outcome.problems {
         eprintln!("  {p}");
     }
-    println!("Freed {}. {} moved to the Recycle Bin.", format_bytes(outcome.freed), plural(outcome.sessions_deleted, "session"));
+    println!("Freed {}. {} moved to the {}.", format_bytes(outcome.freed), plural(outcome.sessions_deleted, "session"), os::TRASH_NAME);
     Ok(())
 }
 

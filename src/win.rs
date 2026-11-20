@@ -22,6 +22,67 @@ use windows_sys::Win32::System::Threading::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, WM_CLOSE};
 
+// MARK: what differs between systems (linux.rs has the same items)
+
+/// The path separator, and whether paths compare without regard to case.
+pub const SEP: char = '\\';
+pub const CASE_INSENSITIVE: bool = true;
+/// Where deleted session data goes, as the user knows it.
+pub const TRASH_NAME: &str = "Recycle Bin";
+/// The release file `hana update` downloads.
+pub const RELEASE_ASSET: &str = "hana.exe";
+/// Process creation times are FILETIMEs: 100-nanosecond ticks since 1601.
+pub fn ticks_per_second() -> u64 {
+    10_000_000
+}
+
+/// `path` with this system's separators.
+pub fn native(path: &str) -> String {
+    path.replace('/', "\\")
+}
+
+/// A creation time as milliseconds since 1970, to compare with timestamps Claude Code records.
+pub fn epoch_ms(created: u64) -> Option<f64> {
+    const UNIX_EPOCH_AS_FILETIME: u64 = 116_444_736_000_000_000;
+    (created > UNIX_EPOCH_AS_FILETIME).then(|| (created - UNIX_EPOCH_AS_FILETIME) as f64 / 10_000.0)
+}
+
+/// Where hana keeps its settings: %APPDATA%.
+pub fn config_base() -> std::path::PathBuf {
+    std::env::var_os("APPDATA").map(std::path::PathBuf::from).unwrap_or_else(|| ".".into())
+}
+
+/// curl.exe from System32, not whatever is first on PATH. It ships with Windows 10 (1803) and 11.
+pub fn curl_program() -> std::path::PathBuf {
+    let root = std::env::var_os("SystemRoot").map(std::path::PathBuf::from).unwrap_or_else(|| r"C:\Windows".into());
+    root.join("System32").join("curl.exe")
+}
+
+/// A downloaded program can run as it is on Windows.
+pub fn make_executable(_path: &std::path::Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+pub fn open_folder(path: &str) -> std::io::Result<()> {
+    std::process::Command::new("explorer.exe").arg(path).spawn().map(|_| ())
+}
+
+pub fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    // clip.exe reads UTF-16 when the input starts with a byte-order mark.
+    let mut child = Command::new("clip.exe").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    let mut bytes = vec![0xFF, 0xFE];
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    child.stdin.take().expect("piped stdin").write_all(&bytes)?;
+    child.wait()?;
+    Ok(())
+}
+
+// MARK: Win32
+
 const SYNCHRONIZE: u32 = 0x0010_0000;
 const AF_INET: u32 = 2;
 const AF_INET6: u32 = 23;
@@ -62,8 +123,8 @@ pub fn current_pid() -> u32 {
     unsafe { GetCurrentProcessId() }
 }
 
-/// Now, in 100-nanosecond ticks since 1601, the unit process creation times are kept in.
-pub fn now_filetime() -> u64 {
+/// Now, in the unit process creation times are kept in (see TICKS_PER_SECOND).
+pub fn now_ticks() -> u64 {
     let mut ft: FILETIME = unsafe { zeroed() };
     unsafe { GetSystemTimeAsFileTime(&mut ft) };
     filetime(ft)
@@ -349,10 +410,14 @@ fn visible_windows() -> HashMap<u32, Vec<isize>> {
 
 /// Asks windowed apps to close, the way clicking their close button would.
 /// Returns the PIDs that had a window to ask; console programs have none.
-pub fn request_close(pids: &[u32]) -> Vec<u32> {
+pub fn request_close(targets: &[(u32, u64)]) -> Vec<u32> {
     let windows = visible_windows();
     let mut asked = Vec::new();
-    for &pid in pids {
+    for &(pid, created) in targets {
+        // The PID may belong to a newer process by now.
+        if !is_running(pid, created) {
+            continue;
+        }
         if let Some(hwnds) = windows.get(&pid) {
             for &hwnd in hwnds {
                 unsafe { PostMessageW(hwnd as HWND, WM_CLOSE, 0, 0) };

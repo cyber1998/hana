@@ -1,0 +1,58 @@
+name: Linux
+
+# Tests hana on Linux for every push (any branch) and pull request. When a release is published (the Windows
+# build is uploaded by hand), builds a static Linux binary, attaches it to that release and adds
+# its checksum to SHA256SUMS.txt, which is what `hana update` verifies against.
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to attach a Linux build to (e.g. v0.4.0); leave empty to only test
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test --release
+
+  release:
+    needs: test
+    if: github.event_name == 'release' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Install musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Build a static binary
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl
+          cp target/x86_64-unknown-linux-musl/release/hana hana-linux-x86_64
+          ./hana-linux-x86_64 --version
+      - name: Attach it to the release
+        run: |
+          gh release download "$TAG" --pattern SHA256SUMS.txt --clobber || touch SHA256SUMS.txt
+          grep -v 'hana-linux-x86_64$' SHA256SUMS.txt > sums || true
+          sha256sum hana-linux-x86_64 | sed 's/  / */' >> sums
+          mv sums SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" hana-linux-x86_64 SHA256SUMS.txt --clobber

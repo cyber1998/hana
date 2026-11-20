@@ -1,6 +1,6 @@
-//! Checking GitHub for a newer release of hana, and swapping the running hana.exe for it.
+//! Checking GitHub for a newer release of hana, and swapping the running program for it.
 //!
-//! Downloads go through curl.exe, which ships with Windows 10 (1803 and later) and 11, so hana
+//! Downloads go through curl (curl.exe ships with Windows 10 1803 and later; Linux has curl), so hana
 //! carries no HTTP or TLS code of its own. The only thing sent is a plain request for the latest
 //! release; checks happen at most once a day and can be turned off in settings.
 
@@ -11,10 +11,10 @@ use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 
 use crate::store::Config;
-use crate::win;
+use crate::os;
 
 const REPO: &str = "cyber1998/hana";
-const ASSET: &str = "hana.exe";
+const ASSET: &str = os::RELEASE_ASSET;
 const SUMS: &str = "SHA256SUMS.txt";
 const CHECK_EVERY_SECS: u64 = 24 * 3600;
 
@@ -59,17 +59,16 @@ fn now() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-/// curl.exe from System32, not whatever is first on PATH.
+/// curl, as the system layer finds it.
 fn curl() -> Command {
-    let root = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
-    let mut cmd = Command::new(root.join("System32").join("curl.exe"));
+    let mut cmd = Command::new(os::curl_program());
     cmd.args(["--fail", "--silent", "--show-error", "--location", "--max-time", "60", "--user-agent", "hana-updater"]);
     cmd.stdin(Stdio::null());
     cmd
 }
 
 fn fetch(url: &str) -> Result<Vec<u8>, String> {
-    let out = curl().arg(url).output().map_err(|e| format!("could not run curl.exe: {e}"))?;
+    let out = curl().arg(url).output().map_err(|e| format!("could not run curl: {e}"))?;
     if out.status.success() {
         Ok(out.stdout)
     } else {
@@ -78,7 +77,7 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
 }
 
 fn download(url: &str, to: &Path) -> Result<(), String> {
-    let out = curl().arg("--output").arg(to).arg(url).output().map_err(|e| format!("could not run curl.exe: {e}"))?;
+    let out = curl().arg("--output").arg(to).arg(url).output().map_err(|e| format!("could not run curl: {e}"))?;
     if out.status.success() {
         Ok(())
     } else {
@@ -130,52 +129,62 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// Downloads the release tagged `tag`, checks it against the release's checksums and that it runs,
-/// then puts it in place of the running hana.exe. Windows lets a running exe be renamed but not
-/// overwritten, so the old one moves aside to hana.exe.old and is deleted on the next start.
+/// then puts it in place of the running program. Windows lets a running exe be renamed but not
+/// overwritten, so the old one moves aside to <name>.old and is deleted on the next start.
 pub fn install(tag: &str) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| format!("could not find hana.exe: {e}"))?;
-    let new = exe.with_extension("exe.new");
-    let old = exe.with_extension("exe.old");
+    let exe = std::env::current_exe().map_err(|e| format!("could not find hana itself: {e}"))?;
+    let new = sibling(&exe, "new");
+    let old = sibling(&exe, "old");
     let base = format!("https://github.com/{REPO}/releases/download/{tag}");
 
     let sums = fetch(&format!("{base}/{SUMS}"))?;
-    let expected = listed_sum(&String::from_utf8_lossy(&sums), ASSET).ok_or("the release lists no checksum for hana.exe")?;
+    let expected = listed_sum(&String::from_utf8_lossy(&sums), ASSET).ok_or("the release lists no checksum for this system's build")?;
     let _ = fs::remove_file(&new);
     download(&format!("{base}/{ASSET}"), &new)?;
-    let result = verify(&new, &expected, tag).and_then(|()| swap(&exe, &new, &old));
+    let result = os::make_executable(&new)
+        .map_err(|e| format!("could not make the download runnable: {e}"))
+        .and_then(|()| verify(&new, &expected, tag))
+        .and_then(|()| swap(&exe, &new, &old));
     let _ = fs::remove_file(&new);
     result
 }
 
 fn verify(file: &Path, expected: &str, tag: &str) -> Result<(), String> {
     let data = fs::read(file).map_err(|e| format!("could not read the download: {e}"))?;
-    let actual = win::sha256(&data).map(|h| hex(&h)).ok_or("could not compute a checksum")?;
+    let actual = os::sha256(&data).map(|h| hex(&h)).ok_or("could not compute a checksum")?;
     if actual != expected {
         return Err("the download does not match the release's checksum; nothing was changed".into());
     }
-    let out = Command::new(file).arg("--version").stdin(Stdio::null()).output().map_err(|e| format!("the new hana.exe does not start: {e}"))?;
+    let out = Command::new(file).arg("--version").stdin(Stdio::null()).output().map_err(|e| format!("the new hana does not start: {e}"))?;
     let said = String::from_utf8_lossy(&out.stdout);
     match parse(said.trim().trim_start_matches("hana")) {
         Some(v) if Some(v) == parse(tag) => Ok(()),
-        _ => Err(format!("the new hana.exe reports \"{}\" instead of {tag}; nothing was changed", said.trim())),
+        _ => Err(format!("the new hana reports \"{}\" instead of {tag}; nothing was changed", said.trim())),
     }
 }
 
 fn swap(exe: &Path, new: &Path, old: &Path) -> Result<(), String> {
     let _ = fs::remove_file(old);
-    fs::rename(exe, old).map_err(|e| format!("could not move the current hana.exe aside: {e}"))?;
+    fs::rename(exe, old).map_err(|e| format!("could not move the current hana aside: {e}"))?;
     if let Err(e) = fs::rename(new, exe) {
         let _ = fs::rename(old, exe);
-        return Err(format!("could not put the new hana.exe in place: {e}"));
+        return Err(format!("could not put the new hana in place: {e}"));
     }
     Ok(())
 }
 
-/// Removes the hana.exe.old an update left behind. It can't be deleted while it is still running,
+/// The program's own path with a suffix: hana.exe → hana.exe.new, hana → hana.new.
+fn sibling(exe: &Path, suffix: &str) -> PathBuf {
+    let mut name = exe.as_os_str().to_owned();
+    name.push(format!(".{suffix}"));
+    PathBuf::from(name)
+}
+
+/// Removes the <name>.old an update left behind. On Windows it can't be deleted while it still runs,
 /// so this happens on the next start.
 pub fn clean_up() {
     if let Ok(exe) = std::env::current_exe() {
-        let _ = fs::remove_file(exe.with_extension("exe.old"));
+        let _ = fs::remove_file(sibling(&exe, "old"));
     }
 }
 
@@ -206,9 +215,9 @@ mod tests {
 
     #[test]
     fn hashes_like_sha256() {
-        let empty = win::sha256(b"").map(|h| hex(&h));
+        let empty = os::sha256(b"").map(|h| hex(&h));
         assert_eq!(empty.as_deref(), Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
-        let abc = win::sha256(b"abc").map(|h| hex(&h));
+        let abc = os::sha256(b"abc").map(|h| hex(&h));
         assert_eq!(abc.as_deref(), Some("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
     }
 }

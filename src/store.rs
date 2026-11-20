@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot};
-use crate::win;
+use crate::os;
 
 pub const MINIMUM_IDLE_LIMIT: u64 = 30;
 /// In live sessions, processes younger than this are hidden; those are ordinary tool calls.
@@ -47,7 +47,7 @@ impl Default for Config {
 
 impl Config {
     fn dir(name: &str) -> PathBuf {
-        let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+        let base = os::config_base();
         base.join(name).join("config.json")
     }
 
@@ -213,36 +213,36 @@ pub fn kill(targets: &[Target], cfg: &Config, grace: Duration) -> KillReport {
         }
     }
 
-    let pids: Vec<u32> = order.iter().map(|o| o.0).collect();
-    let asked = win::request_close(&pids);
+    // Politely first: close windows on Windows, SIGTERM on Linux.
+    let asked = os::request_close(&order);
     if !asked.is_empty() {
         let asked: HashSet<u32> = asked.into_iter().collect();
         let deadline = Instant::now() + grace;
-        while Instant::now() < deadline && order.iter().any(|&(pid, c)| asked.contains(&pid) && win::is_running(pid, c)) {
+        while Instant::now() < deadline && order.iter().any(|&(pid, c)| asked.contains(&pid) && os::is_running(pid, c)) {
             thread::sleep(Duration::from_millis(100));
         }
     }
     for &(pid, created) in &order {
-        if win::is_running(pid, created) {
-            win::terminate(pid, created);
+        if os::is_running(pid, created) {
+            os::terminate(pid, created);
         }
     }
     // Give the system a moment to remove them before the next scan.
     let reaped = Instant::now() + Duration::from_secs(1);
-    while Instant::now() < reaped && order.iter().any(|&(pid, c)| win::is_running(pid, c)) {
+    while Instant::now() < reaped && order.iter().any(|&(pid, c)| os::is_running(pid, c)) {
         thread::sleep(Duration::from_millis(50));
     }
 
     let memory: HashMap<u32, u64> = order.iter().map(|&(pid, _)| (pid, snap.infos[&pid].memory)).collect();
     let mut report = KillReport::default();
     for &(pid, created) in &order {
-        if !win::is_running(pid, created) {
+        if !os::is_running(pid, created) {
             report.all_gone.push(pid);
             report.freed += memory[&pid];
         }
     }
     for t in targets {
-        if report.all_gone.contains(&t.pid) || !win::is_running(t.pid, t.created) {
+        if report.all_gone.contains(&t.pid) || !os::is_running(t.pid, t.created) {
             report.gone.push(t.pid);
         } else {
             report.survivors.push(t.pid);
@@ -301,33 +301,43 @@ mod tests {
     use super::*;
     use std::process::{Command, Stdio};
 
-    /// Ending a process also ends what it started, since Windows does not do that by itself.
+    /// Ending a process also ends what it started: neither Windows nor Linux does that by itself.
     /// Only touches processes this test spawns.
     #[test]
     fn kill_takes_descendants_along() {
-        let mut parent = Command::new("cmd.exe")
-            .args(["/c", "ping -n 60 127.0.0.1 >nul"])
-            .stdout(Stdio::null())
-            .spawn()
-            .expect("spawn cmd");
+        // A shell that starts a long-running child: cmd with ping on Windows, sh with sleep on Linux.
+        #[cfg(windows)]
+        let (mut command, child_name) = {
+            let mut c = Command::new("cmd.exe");
+            c.args(["/c", "ping -n 60 127.0.0.1 >nul"]);
+            (c, "ping.exe")
+        };
+        #[cfg(not(windows))]
+        let (mut command, child_name) = {
+            let mut c = Command::new("sh");
+            // The trailing `true` keeps sh from replacing itself with sleep.
+            c.args(["-c", "sleep 60; true"]);
+            (c, "sleep")
+        };
+        let mut parent = command.stdout(Stdio::null()).spawn().expect("spawn shell");
         let pid = parent.id();
-        // Wait for cmd to start its ping.
+        // Wait for the shell to start its child.
         let deadline = Instant::now() + Duration::from_secs(5);
         let child = loop {
             let snap = Snapshot::take();
-            if let Some(&c) = snap.children().get(&pid).and_then(|c| c.iter().find(|&&c| snap.infos[&c].name == "ping.exe")) {
+            if let Some(&c) = snap.children().get(&pid).and_then(|c| c.iter().find(|&&c| snap.infos[&c].name == child_name)) {
                 break (c, snap.infos[&c].created);
             }
             assert!(Instant::now() < deadline, "ping never started");
             thread::sleep(Duration::from_millis(100));
         };
-        let created = win::inspect(pid, false).created;
-        assert!(win::is_running(child.0, child.1));
+        let created = os::inspect(pid, false).created;
+        assert!(os::is_running(child.0, child.1));
 
         let report = kill(&[Target { pid, created }], &Config::default(), Duration::from_millis(200));
         assert_eq!(report.gone, vec![pid]);
         assert!(report.all_gone.contains(&child.0), "child left running: {report:?}");
-        assert!(!win::is_running(child.0, child.1));
+        assert!(!os::is_running(child.0, child.1));
         let _ = parent.wait();
     }
 

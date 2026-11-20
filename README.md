@@ -56,6 +56,17 @@ hana
 
 That's all. It's a single 1.3 MB file for 64-bit Windows 10 and 11, with no installer and no runtime. If Windows SmartScreen warns about a downloaded file, choose **More info → Run anyway**: the binary isn't code-signed.
 
+<details>
+<summary><b>On Linux</b> (x86-64, any distribution)</summary>
+
+```sh
+mkdir -p ~/.local/bin && curl -fsSL -o ~/.local/bin/hana https://github.com/cyber1998/hana/releases/latest/download/hana-linux-x86_64 && chmod +x ~/.local/bin/hana
+```
+
+Then run `hana`. It's a single static file with no dependencies. Session data goes to your desktop's trash (`~/.local/share/Trash`), and settings live in `~/.config/hana`. Copying needs `wl-copy` or `xclip`; under WSL, Windows' clipboard is used.
+
+</details>
+
 **Updating:** hana checks for a new release once a day and shows `v… available · U` in the corner. Press `U`, or run `hana update`. The download is checked against the release's SHA-256 checksums before it replaces anything.
 
 <details>

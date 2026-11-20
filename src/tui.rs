@@ -2,8 +2,7 @@
 //! for session data and worktrees. Two looks: classic and kawaii.
 
 use std::collections::HashSet;
-use std::io::{self, Write};
-use std::process::{Command, Stdio};
+use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
@@ -17,6 +16,7 @@ use ratatui::{DefaultTerminal, Frame};
 use unicode_width::UnicodeWidthChar;
 
 use crate::bloom;
+use crate::os;
 use crate::disk::{self, Outcome, SessionData, StorageResult, Worktree};
 use crate::scanner::{self, Proc, RunningSession, SessionGroup, Snapshot, Status};
 use crate::themes::{self, Theme};
@@ -1205,7 +1205,7 @@ impl App {
             Line::default(),
             head("storage"),
             key("space", "mark · M mark older than 30 days · u unmark all"),
-            key("x", "delete marked (session data goes to the Recycle Bin)"),
+            key("x", if cfg!(windows) { "delete marked (session data goes to the Recycle Bin)" } else { "delete marked (session data goes to the trash)" }),
             Line::default(),
             head("anywhere"),
             key("↑↓ jk", "move · tab switch view · r rescan"),
@@ -1503,7 +1503,7 @@ impl App {
         q.push(String::new());
         if !sessions.is_empty() {
             let resumable = sessions.iter().filter(|d| d.has_transcript()).count();
-            q.push("Session data goes to the Recycle Bin.".into());
+            q.push(format!("Session data goes to the {}.", os::TRASH_NAME));
             if resumable > 0 {
                 q.push(format!("{} can no longer be resumed with `claude --resume` after this.", plural(resumable, "session")));
             }
@@ -1561,7 +1561,7 @@ impl App {
                 _ => return,
             }
         };
-        match copy_to_clipboard(&text) {
+        match os::copy_to_clipboard(&text) {
             Ok(()) => self.say(self.theme().copied),
             Err(e) => self.say(format!("Could not copy: {e}")),
         }
@@ -1578,8 +1578,8 @@ impl App {
             self.say("No folder on disk for this row");
             return;
         };
-        if Command::new("explorer.exe").arg(&folder).spawn().is_err() {
-            self.say("Could not open Explorer");
+        if os::open_folder(&folder).is_err() {
+            self.say("Could not open the folder");
         }
     }
 
@@ -1655,11 +1655,10 @@ impl App {
     }
 }
 
-/// `path` is `root` or a folder inside it (case-insensitive, as Windows paths are).
+/// `path` is `root` or a folder inside it (ignoring case where the system does).
 fn inside(path: &str, root: &str) -> bool {
-    let norm = |s: &str| s.replace('/', "\\").trim_end_matches('\\').to_lowercase();
-    let (p, r) = (norm(path), norm(root));
-    p == r || p.starts_with(&format!("{r}\\"))
+    let (p, r) = (disk::norm(path), disk::norm(root));
+    p == r || p.starts_with(&format!("{r}{}", os::SEP))
 }
 
 fn kind_prefix(kind: &RowKind) -> &'static str {
@@ -1723,17 +1722,6 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
     Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h }
 }
 
-fn copy_to_clipboard(text: &str) -> io::Result<()> {
-    // clip.exe reads UTF-16 when the input starts with a byte-order mark.
-    let mut child = Command::new("clip.exe").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-    let mut bytes = vec![0xFF, 0xFE];
-    for unit in text.encode_utf16() {
-        bytes.extend_from_slice(&unit.to_le_bytes());
-    }
-    child.stdin.take().expect("piped stdin").write_all(&bytes)?;
-    child.wait()?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod screens;
