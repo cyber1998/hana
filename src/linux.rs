@@ -418,6 +418,42 @@ mod tests {
     }
 
     #[test]
+    fn sees_its_own_listening_port() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let ports = listening_ports();
+        assert!(ports.get(&current_pid()).is_some_and(|p| p.contains(&port)), "port {port} not found: {:?}", ports.get(&current_pid()));
+    }
+
+    /// A file and a folder go to the trash with their .trashinfo, and a second file of the same
+    /// name gets a name of its own. Uses a scratch XDG_DATA_HOME, never the real trash.
+    #[test]
+    fn moves_to_trash() {
+        let base = std::env::temp_dir().join(format!("hana-trash-test-{}", current_pid()));
+        let _ = fs::remove_dir_all(&base);
+        let data = base.join("data");
+        let work = base.join("work");
+        fs::create_dir_all(work.join("folder")).unwrap();
+        fs::write(work.join("a.txt"), "a").unwrap();
+        fs::write(work.join("folder").join("b.txt"), "b").unwrap();
+        // SAFETY: no other test reads XDG_DATA_HOME.
+        unsafe { std::env::set_var("XDG_DATA_HOME", &data) };
+
+        recycle(&[work.join("a.txt"), work.join("folder")]).unwrap();
+        fs::write(work.join("a.txt"), "again").unwrap();
+        recycle(&[work.join("a.txt")]).unwrap();
+
+        let trash = data.join("Trash");
+        assert!(!work.join("a.txt").exists() && !work.join("folder").exists());
+        assert_eq!(fs::read_to_string(trash.join("files").join("a.txt")).unwrap(), "a");
+        assert_eq!(fs::read_to_string(trash.join("files").join("a.txt.2")).unwrap(), "again");
+        assert!(trash.join("files").join("folder").join("b.txt").is_file());
+        let info = fs::read_to_string(trash.join("info").join("a.txt.trashinfo")).unwrap();
+        assert!(info.starts_with("[Trash Info]\nPath=/") && info.contains("/work/a.txt\n") && info.contains("DeletionDate=20"), "{info}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn trash_paths_and_dates() {
         assert_eq!(percent_encode("/home/a b/ü.txt"), "/home/a%20b/%C3%BC.txt");
         let date = now_local_iso();

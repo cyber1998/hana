@@ -26,6 +26,24 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test
         run: cargo test --release
+      - name: Run the commands
+        run: |
+          hana=target/release/hana
+          $hana --version
+          $hana --help > /dev/null
+          $hana themes
+          $hana config
+          # A leftover to find: a process carrying Claude Code's markers whose Claude Code is gone.
+          CLAUDECODE=1 CLAUDE_CODE_SESSION_ID=00000000-0000-4000-8000-000000000001 CLAUDE_PID=1 \
+            python3 -m http.server 45678 --bind 127.0.0.1 > /dev/null 2>&1 &
+          sleep 2
+          $hana list | tee list.txt
+          grep -q "45678" list.txt
+          $hana list --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("left behind:", sum(len(g["procs"]) for g in d["orphans"]))'
+          $hana kill-all -y
+          sleep 1
+          ! $hana list | grep -q "45678"
+          $hana disk
 
   release:
     needs: test
