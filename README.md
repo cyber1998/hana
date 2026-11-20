@@ -6,6 +6,7 @@
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-F4A7C0?style=flat-square&logo=windows&logoColor=white&labelColor=1F1520">
   <img alt="Written in Rust" src="https://img.shields.io/badge/Rust-stable-F74C00?style=flat-square&logo=rust&logoColor=white&labelColor=1F1520">
   <a href="https://github.com/cyber1998/hana/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/cyber1998/hana?style=flat-square&color=F4A7C0&labelColor=1F1520"></a>
+  <a href="https://github.com/cyber1998/hana/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/cyber1998/hana/total?style=flat-square&color=F4A7C0&labelColor=1F1520&label=downloads"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-B5E8C9?style=flat-square&labelColor=1F1520">
   <img alt="Based on seshka" src="https://img.shields.io/badge/based%20on-seshka-E8B4D8?style=flat-square&labelColor=1F1520">
 </p>
